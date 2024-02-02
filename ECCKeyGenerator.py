@@ -16,7 +16,7 @@ def get_mac_address():
 
 
 def get_vid():
-    with open('content/Vid/VID.txt', "rb") as fwrite16:
+    with open('content/Vid/ishq/VID.txt', "rb") as fwrite16:
         vid_data = fwrite16.read()
     return vid_data
 
@@ -35,16 +35,6 @@ def generate_x_coordinate():
     x_coordinate = int.from_bytes(hashed_data, byteorder='big')
 
     return x_coordinate
-
-
-# Generate ECC key pair
-private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
-public_key = private_key.public_key()
-
-# Custom ECC Equation Constants
-a = int.from_bytes(get_vid(), 'big')  # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
-b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
-
 
 def ecc_generate_key():
     # Compute the x coordinate from the shared secret
@@ -79,15 +69,24 @@ def base64_to_int(base64_encoded):
     return decoded_integer
 
 
+# Generate ECC key pair
+private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+public_key = private_key.public_key()
 # Perform ECDH key exchange to obtain the shared secret
 # shared_secret = private_key.exchange(ec.ECDH(), public_key)
+a = int.from_bytes(get_vid(), 'big')  # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
+b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
 
 # Generate ECC-based key using the shared secret
 ecc_key = ecc_generate_key()
 
 print("ECC number Key:", ecc_key)
-print("type of ecc key", type(ecc_key))
+print("Len of ecc key", len(str(ecc_key)))
+print("Len of a ", len(get_vid()))
+
 # Convert ECC key to Base64 and back to integer
 int2b64 = int_to_base64(ecc_key)
 print("ECC int_to_base64 is ", int2b64)
+print("its lenght is ", len(int2b64))
 print("ECC base64_to_int is ", base64_to_int(int2b64))
+print("its lenght is ", len(str(base64_to_int(int2b64))))

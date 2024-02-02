@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import time
+import uuid
 
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -15,7 +16,9 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 # from encryptVideoUsingAESandRSA import encrypt_video, decrypt_video, write_file, generate_aes_key
 from ClearFolders import delete_files_in_subfolders
-from ECCKeyGenerator import ecc_generate_key, int_to_base64
+
+
+# from ECCKeyGenerator import ecc_generate_key, int_to_base64
 
 
 # from encryptFirstChunk import chunk
@@ -32,7 +35,47 @@ def read_video_file(file_path):
 #         aes_key = file.read().strip()
 #         print("type of aes key read is ", type(aes_key))
 #     return aes_key  # AES key size is 16 bytes (128 bits)
-#
+
+def generate_x_coordinate():
+    # Collect system-specific information
+    system_time = str(time.time()).encode()  # Current system time
+    process_id = str(os.getpid()).encode()  # Process ID
+    machine_id = str(uuid.uuid4()).replace("-", "").encode()  # Machine ID (example: user ID)
+
+    # Concatenate and hash the collected information
+    data_to_hash = b''.join([system_time, process_id, machine_id])
+    hashed_data = hashlib.sha256(data_to_hash).digest()
+
+    # Convert the hash to an integer for use as the x-coordinate
+    x_coordinate = int.from_bytes(hashed_data, byteorder='big')
+
+    return x_coordinate
+
+
+def int_to_base64(integer):
+    """
+    :param integer: takes in integer values
+    :return: returns base64 encoded string
+    """
+    # Convert integer to bytes
+    integer_bytes = integer.to_bytes((integer.bit_length() + 7) // 8, byteorder='big')
+    # Encode bytes to Base64
+    base64_encoded = base64.b64encode(integer_bytes)
+    return base64_encoded
+
+
+def ecc_generate_key():
+    # Compute the x coordinate from the shared secret
+    x = generate_x_coordinate()
+
+    # Compute the RHS of the ECC equation
+    rhs = x ** 3 + a * x + b
+
+    # Compute the square root of the RHS
+    y = int(math.sqrt(rhs))
+
+    return y
+
 
 def generate_aes_key_with_ecc():
     ecc_key = ecc_generate_key()
@@ -42,10 +85,12 @@ def generate_aes_key_with_ecc():
     aes_key = hashlib.sha256(ecc_key_base64).digest()
 
     # Truncate the key to 16 bytes (128 bits) if needed
-    aes_key = aes_key[:16]
+    aes_key = aes_key[:32]
 
     return aes_key
 
+
+# Function to encrypt video using AES-GCM and RSA
 def encrypt_video(video_file, public_key_file):
     # Read the video file
     video_data = read_video_file(video_file)
@@ -53,29 +98,21 @@ def encrypt_video(video_file, public_key_file):
     # Generate a random AES key
     aes_key = generate_aes_key_with_ecc()
 
-    # # Encrypt the video data using AES
-    # cipher_aes = AES.new(aes_key, AES.MODE_GCM)
-    # encrypted_video, tag = cipher_aes.encrypt_and_digest(video_data)
-    # nonce = cipher_aes.nonce
-    # Encrypt the video data using AES
-    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(), backend=default_backend())
+    # Generate a random nonce
+    nonce = os.urandom(16)  # Nonce size for AES GCM mode is typically 12 bytes
+
+    # Encrypt the video data using AES GCM
+    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce), backend=default_backend())
     encryptor = cipher_aes.encryptor()
     encrypted_video = encryptor.update(video_data) + encryptor.finalize()
     tag = encryptor.tag
-    nonce = encryptor.nonce
-    # Read the public key
-    # with open(public_key_file, 'rb') as f:
-    #     public_key = RSA.import_key(f.read())
-    with open(public_key_file, 'rb') as f:
-        public_key = serialization.load_pem_public_key(
-            f.read(),
-            backend=default_backend()
-        )
 
-    # Initialize the cipher with the public key
-    #cipher_rsa = PKCS1_OAEP.new(public_key)
-    # Initialize the cipher with the public key
-    cipher_rsa = public_key.encrypt(
+    # Read the public key
+    with open(public_key_file, 'rb') as f:
+        public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+
+    # Encrypt the AES key using RSA
+    encrypted_aes_key = public_key.encrypt(
         aes_key,
         padding.OAEP(
             mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -83,26 +120,20 @@ def encrypt_video(video_file, public_key_file):
             label=None
         )
     )
+    print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
+    print(f'len of nonce  is {len(nonce)}')
+    print(f'len of tag  is {len(tag)}')
+    print(f'len of encrypted_video  is {len(encrypted_video)}')
 
-    # Encrypt the AES key using RSA
-    encrypted_aes_key = cipher_rsa.encrypt(aes_key)
-    print("size of encrypted_aes_key", len(encrypted_aes_key))
-    print("size of encrypted_video", len(encrypted_video))
     # Combine encrypted AES key, nonce, tag, and encrypted video data
     encrypted_data = encrypted_aes_key + nonce + tag + encrypted_video
+    print(f'len of encrypted_data  is {len(encrypted_data)}')
 
     return encrypted_data
 
 
-# Function to decrypt the video file using RSA for the AES key
+# Function to decrypt video using RSA and AES-GCM
 def decrypt_video(encrypted_data, private_key_file):
-    # Read the private key
-    with open(private_key_file, 'rb') as f:
-        private_key = RSA.import_key(f.read())
-
-    # Initialize the cipher with the private key
-    cipher_rsa = PKCS1_OAEP.new(private_key)
-
     # Extract the encrypted AES key, nonce, tag, and encrypted video data
     aes_key_size = 256  # Assuming AES key size of 256 bits
     encrypted_aes_key = encrypted_data[:aes_key_size]
@@ -112,12 +143,23 @@ def decrypt_video(encrypted_data, private_key_file):
     tag = encrypted_data[tag_start:tag_end]
     encrypted_video = encrypted_data[tag_end:]
 
-    # Decrypt the AES key using RSA
-    aes_key = cipher_rsa.decrypt(encrypted_aes_key)
+    # Read the private key
+    with open(private_key_file, 'rb') as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
 
-    # Initialize the AES cipher with the decrypted AES key, nonce, and tag
-    cipher_aes = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-    decrypted_video = cipher_aes.decrypt_and_verify(encrypted_video, tag)
+    # Decrypt the AES key using RSA
+    aes_key = private_key.decrypt(
+        encrypted_aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    # Decrypt the video data using AES GCM
+    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
+    decryptor = cipher_aes.decryptor()
+    decrypted_video = decryptor.update(encrypted_video) + decryptor.finalize()
 
     return decrypted_video
 
@@ -194,58 +236,54 @@ def split_video_ffmpeg(input_file, output_folder):
 
     # Calculate the number of chunks needed
     num_chunks = total_size // target_chunk_size_bytes + (total_size % target_chunk_size_bytes > 0)
-    print("num of chunks ",num_chunks)
+    print("num of chunks ", num_chunks)
     # Get video duration using ffprobe
     duration = get_video_duration(input_file)
+    print("Duration of video is: ", duration)
 
     # Calculate the duration of each chunk in seconds
     chunk_duration_seconds = duration / num_chunks
+    print("chunk_duration_seconds is ", chunk_duration_seconds)
+    start_time_seconds = 0
 
     # Use FFmpeg to split the video into consecutive chunks of target_chunk_size_MB_param MB each
     for i in range(num_chunks):
+        start_time_for = time.time()
         output_file = os.path.join(output_folder,
                                    f'{os.path.splitext(os.path.basename(input_file))[0]}_part_{i + 1}.mp4')
+        print("\nfor output file: ", output_file)
 
         # Calculate the start and end timestamps for the current chunk
-        start_time_seconds = i * chunk_duration_seconds
-        end_time_seconds = min((i + 1) * chunk_duration_seconds, duration)
-
+        end_time_seconds = min(start_time_seconds + chunk_duration_seconds, duration)
+        print(f'start time is {start_time_seconds} and end time is {end_time_seconds}')
         # Run FFmpeg command to create the chunk
         subprocess.run([
             'E:\\installs\\ffmpeg\\bin\\ffmpeg.exe',
             '-i', input_file,
-            '-c', 'copy',
-            '-map', '0',
-            '-ss', f'{start_time_seconds:.6f}',  # Start timestamp for the chunk
-            '-to', f'{end_time_seconds:.6f}',  # End timestamp for the chunk
-            '-force_key_frames', f'expr:gte(t,n_forced*{chunk_duration_seconds})',
+            # '-c', 'copy',
+            '-ss', str(start_time_seconds),  # Start timestamp
+            '-to', str(end_time_seconds),  # End timestamp
             output_file
-        ],  stdout=subprocess.PIPE, stderr=subprocess.PIPE,check=True)
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        start_time_seconds = end_time_seconds
 
-
-# Function to save the first video chunk bytes
-def save_first_video_chunk_bytes(i, output_file, action):
-    with open(output_file, 'rb') as f:
-        chunk_data = f.read()
-        print("Chunk data read is of size ", len(chunk_data))
-        with open(f'content/ChunkData/{i + 1}_chunk_bytes.txt', "wb") as fwrite:
-            fwrite.write(chunk_data)
-        start_time = time.time()
-        chunk('encrypt', output_file)
-        end_time = time.time()  # Record the end time
-        execution_time = end_time - start_time
-        print(f"Execution time: {execution_time:.6f} seconds")
-
-        # Find the position of the first occurrence of "!"
-        bmdat_position = chunk_data.find(b'!')
-
-        # Ensure "!" is found before attempting to extract bytes
-        if bmdat_position != -1:
-            # Extract the 16 bytes after the occurrence of "!"
-            extracted_bytes = chunk_data[bmdat_position + len('!'): bmdat_position + len('!') + 16]
-            extracted_bytes_base64 = base64.b64encode(extracted_bytes).rstrip(b'=')
-            with open('content/Vid/VID.txt', "wb") as fwrite_base64:
-                fwrite_base64.write(extracted_bytes_base64)
+        # subprocess.run([
+        #     'E:\\installs\\ffmpeg\\bin\\ffmpeg.exe',
+        #     '-i', input_file,
+        #     '-c', 'copy',
+        #     '-map', '0',
+        #     '-segment_time', str(10),
+        #     '-force_key_frames', f'expr:gte(t,n_forced*{chunk_duration_seconds})',
+        #     '-f', 'segment',
+        #     output_file
+        # ],stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        # Check if the current file is the first part file
+        if i == 0:
+            first_part_file = output_file
+            save_vid(first_part_file)
+        end_time_for = time.time()
+        execution_time_for = end_time_for - start_time_for
+        print(f"\nChunking time of {os.path.basename(output_file)} is: {execution_time_for:.6f} seconds\n\n")
 
 
 # Function to get the video duration using ffprobe
@@ -296,7 +334,7 @@ def decrypt_chunks(input_folder, output_folder, private_key):
             input_file = os.path.join(input_folder, filename)
             output_file = os.path.join(output_folder, filename)
             output_file = output_file.replace("encrypted_chunk.enc", "decrypted_chunk.mp4")
-            print("Decrypting: ", input_file)
+            print("\nDecrypting: ", input_file)
 
             # Read encrypted chunk data
             with open(input_file, 'rb') as f:
@@ -329,32 +367,37 @@ def combine_video_chunks(input_folder, output_file):
         for file in input_files:
             f.write(f"file '{os.path.basename(file)}'\n")
 
-    # Path to the combine_videos.py script in location B
-    combine_script_path = input_folder + '/combine.sh'
-    # Open source file for reading
-    with open('combine.sh', 'rb') as src:
-        # Open destination file for writing
-        with open(combine_script_path, 'wb') as dest:
-            # Read from source and write to destination
-            dest.write(src.read())
+    # # Path to the combine_videos.py script in location B
+    # combine_script_path = input_folder + '/combine.sh'
+    # # Open source file for reading
+    # with open('combine.sh', 'rb') as src:
+    #     # Open destination file for writing
+    #     with open(combine_script_path, 'wb') as dest:
+    #         # Read from source and write to destination
+    #         dest.write(src.read())
 
     # Store the current working directory
     original_directory = os.getcwd()
 
     # Absolute path to the directory containing the script
-    script_directory = os.path.abspath(combine_script_path)
+    script_directory = os.path.abspath(input_folder)
 
     # Change working directory to the script directory
-    os.chdir(os.path.dirname(script_directory))
+    os.chdir(os.path.dirname(script_directory + f'/{os.path.basename(video_path)[:-4]}'))
     print("present working directory ", os.getcwd())
-
-    # Execute the bash script
-    subprocess.run(['C:\\Program Files\\Git\\bin\\bash.exe', 'combine.sh'],
-                   check=True)
+    subprocess.run(
+        ['E:\\installs\\ffmpeg\\bin\\ffmpeg.exe', '-y', '-f', 'concat', '-safe', '0', '-i', 'file_list.txt', '-c',
+         'copy',
+         'output_video.mp4'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
     os.chdir(original_directory)
+    print("current directory is ", os.getcwd())
+    print("input_folder is ", input_folder.replace("/", "\\"))
+    print("output_file is ", output_file)
     shutil.copy(input_folder + '/output_video.mp4', output_file)
     print(f"Combined video saved to: {output_file}")
+
 
 
 def extract_number(filename):
@@ -363,20 +406,48 @@ def extract_number(filename):
 
 def copy_file(source, destination):
     with open(source, 'rb') as f_source:
-        with open(destination, 'wb') as f_dest:
+        with open(destination, 'wb') as f_destination:
             # Read and write in chunks to handle large files
             chunk_size = 1024
             while True:
-                chunk = f_source.read(chunk_size)
-                if not chunk:
+                source_chunk_data = f_source.read(chunk_size)
+                if not source_chunk_data:
                     break
-                f_dest.write(chunk)
+                f_destination.write(source_chunk_data)
+
+
+def get_vid():
+    with open(f'content/Vid/{os.path.basename(video_path)[:-4]}/Vid.txt', "rb") as fwrite16:
+        vid_data = fwrite16.read()
+    return vid_data
+
+
+def get_mac_address():
+    mac = uuid.getnode()
+    return ''.join(("%012X" % mac)[i:i + 2] for i in range(0, 12, 2))
+
+
+def save_vid(first_chunk_file):
+    if not os.path.exists(f'content/Vid/{os.path.basename(video_path)[:-4]}'):
+        os.makedirs(f'content/Vid/{os.path.basename(video_path)[:-4]}')
+    with open(first_chunk_file, 'rb') as f:
+        first_chunk_data = f.read()
+        bmdat_position = first_chunk_data.find(b'!')
+
+        # Ensure "!" is found before attempting to extract bytes
+        if bmdat_position != -1:
+            # Extract the 16 bytes after the occurrence of "!"
+            extracted_bytes = first_chunk_data[bmdat_position + len('!'): bmdat_position + len('!') + 16]
+            extracted_bytes_base64 = base64.b64encode(extracted_bytes).rstrip(b'=')
+            with open(f'content/Vid/{os.path.basename(video_path)[:-4]}/VID.txt', "wb") as fwrite_base64:
+                fwrite_base64.write(extracted_bytes_base64)
 
 
 # Main function
 if __name__ == "__main__":
     # Path to the original video file
-    video_path = 'Videos/ishq.mp4'
+    video_path = 'Videos/getfit.mp4'
+    # Custom ECC Equation Constants
 
     # Clean up any existing files in relevant directories
     delete_files_in_subfolders('content')
@@ -399,7 +470,9 @@ if __name__ == "__main__":
     split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}')
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"Chunking time: {execution_time:.6f} seconds")
+    print(f"\nChunking time: {execution_time:.6f} seconds")
+    a = int.from_bytes(get_vid(), 'big')  # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
+    b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
 
     start_time = time.time()
     # Encrypt the remaining chunks

@@ -11,6 +11,11 @@
       <excludeFolder url="file://$MODULE_DIR$/content/decrypted_chunks" />
       <excludeFolder url="file://$MODULE_DIR$/content/encrypted_chunks" />
       <excludeFolder url="file://$MODULE_DIR$/chunks_of_ishq" />
+      <excludeFolder url="file://$MODULE_DIR$/chunks_of_getfit" />
+      <excludeFolder url="file://$MODULE_DIR$/content/FinalVideo" />
+      <excludeFolder url="file://$MODULE_DIR$/keys/aesKey" />
+      <excludeFolder url="file://$MODULE_DIR$/keys/privKey" />
+      <excludeFolder url="file://$MODULE_DIR$/keys/pubKey" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
