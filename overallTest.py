@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import math
 import os
 import shutil
@@ -7,9 +8,14 @@ import time
 
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 # from encryptVideoUsingAESandRSA import encrypt_video, decrypt_video, write_file, generate_aes_key
 from ClearFolders import delete_files_in_subfolders
+from ECCKeyGenerator import ecc_generate_key, int_to_base64
 
 
 # from encryptFirstChunk import chunk
@@ -21,31 +27,62 @@ def read_video_file(file_path):
     return fileData
 
 
-def generate_aes_key():
-    with open('keys/aesKey/aes_key.txt', 'rb') as file:
-        aes_key = file.read().strip()
-        print("type of aes key read is ", type(aes_key))
-    return aes_key  # AES key size is 16 bytes (128 bits)
+# def generate_aes_key():
+#     with open('keys/aesKey/aes_key.txt', 'rb') as file:
+#         aes_key = file.read().strip()
+#         print("type of aes key read is ", type(aes_key))
+#     return aes_key  # AES key size is 16 bytes (128 bits)
+#
 
+def generate_aes_key_with_ecc():
+    ecc_key = ecc_generate_key()
+    ecc_key_base64 = int_to_base64(ecc_key)
+
+    # Hash the ECC key to generate an AES key of appropriate size
+    aes_key = hashlib.sha256(ecc_key_base64).digest()
+
+    # Truncate the key to 16 bytes (128 bits) if needed
+    aes_key = aes_key[:16]
+
+    return aes_key
 
 def encrypt_video(video_file, public_key_file):
     # Read the video file
     video_data = read_video_file(video_file)
 
     # Generate a random AES key
-    aes_key = generate_aes_key()
+    aes_key = generate_aes_key_with_ecc()
 
+    # # Encrypt the video data using AES
+    # cipher_aes = AES.new(aes_key, AES.MODE_GCM)
+    # encrypted_video, tag = cipher_aes.encrypt_and_digest(video_data)
+    # nonce = cipher_aes.nonce
     # Encrypt the video data using AES
-    cipher_aes = AES.new(aes_key, AES.MODE_GCM)
-    encrypted_video, tag = cipher_aes.encrypt_and_digest(video_data)
-    nonce = cipher_aes.nonce
-
+    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(), backend=default_backend())
+    encryptor = cipher_aes.encryptor()
+    encrypted_video = encryptor.update(video_data) + encryptor.finalize()
+    tag = encryptor.tag
+    nonce = encryptor.nonce
     # Read the public key
+    # with open(public_key_file, 'rb') as f:
+    #     public_key = RSA.import_key(f.read())
     with open(public_key_file, 'rb') as f:
-        public_key = RSA.import_key(f.read())
+        public_key = serialization.load_pem_public_key(
+            f.read(),
+            backend=default_backend()
+        )
 
     # Initialize the cipher with the public key
-    cipher_rsa = PKCS1_OAEP.new(public_key)
+    #cipher_rsa = PKCS1_OAEP.new(public_key)
+    # Initialize the cipher with the public key
+    cipher_rsa = public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
 
     # Encrypt the AES key using RSA
     encrypted_aes_key = cipher_rsa.encrypt(aes_key)
@@ -144,15 +181,7 @@ def read_file(path):
     return data
 
 
-# Function to split the video using FFmpeg
-def split_video_ffmpeg(input_file, output_folder, target_chunk_size_MB_param, segment_duration):
-    # Check if the output folder exists, create it if not
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # Get video duration using ffprobe
-    duration = get_video_duration(input_file)
-
+def split_video_ffmpeg(input_file, output_folder):
     # Check if the output folder exists, create it if not
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -165,28 +194,33 @@ def split_video_ffmpeg(input_file, output_folder, target_chunk_size_MB_param, se
 
     # Calculate the number of chunks needed
     num_chunks = total_size // target_chunk_size_bytes + (total_size % target_chunk_size_bytes > 0)
-
+    print("num of chunks ",num_chunks)
     # Get video duration using ffprobe
     duration = get_video_duration(input_file)
 
-    # Use FFmpeg to split the video into consecutive chunks of 1MB each
+    # Calculate the duration of each chunk in seconds
+    chunk_duration_seconds = duration / num_chunks
+
+    # Use FFmpeg to split the video into consecutive chunks of target_chunk_size_MB_param MB each
     for i in range(num_chunks):
-        output_file = os.path.join(output_folder, f'part_{i + 1}.mp4')
+        output_file = os.path.join(output_folder,
+                                   f'{os.path.splitext(os.path.basename(input_file))[0]}_part_{i + 1}.mp4')
 
-        # Calculate the start position for the current chunk
-        start_position = i * target_chunk_size_bytes
+        # Calculate the start and end timestamps for the current chunk
+        start_time_seconds = i * chunk_duration_seconds
+        end_time_seconds = min((i + 1) * chunk_duration_seconds, duration)
 
-        # Run FFmpeg command to create the chunk based on the start position and size
-        start_position_seconds = start_position / total_size * duration
+        # Run FFmpeg command to create the chunk
         subprocess.run([
             'E:\\installs\\ffmpeg\\bin\\ffmpeg.exe',
             '-i', input_file,
             '-c', 'copy',
             '-map', '0',
-            '-ss', f'{start_position_seconds:.6f}',  # Format the start position as ss.mmm
-            '-fs', f'{target_chunk_size_bytes}',
+            '-ss', f'{start_time_seconds:.6f}',  # Start timestamp for the chunk
+            '-to', f'{end_time_seconds:.6f}',  # End timestamp for the chunk
+            '-force_key_frames', f'expr:gte(t,n_forced*{chunk_duration_seconds})',
             output_file
-        ], check=True)
+        ],  stdout=subprocess.PIPE, stderr=subprocess.PIPE,check=True)
 
 
 # Function to save the first video chunk bytes
@@ -346,7 +380,7 @@ if __name__ == "__main__":
 
     # Clean up any existing files in relevant directories
     delete_files_in_subfolders('content')
-    if os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
+    if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
         os.makedirs(f'chunks_of_{os.path.basename(video_path)[:-4]}')
 
     delete_files_in_subfolders(f'content/decrypted_chunks/{os.path.basename(video_path)}')
@@ -362,7 +396,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # Split the video into chunks and encrypt the first chunk
-    split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}', 1, 10)
+    split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}')
     end_time = time.time()
     execution_time = end_time - start_time
     print(f"Chunking time: {execution_time:.6f} seconds")

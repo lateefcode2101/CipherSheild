@@ -22,10 +22,6 @@ def get_vid():
 
 
 def generate_x_coordinate():
-    """
-generates x_coordinate using encoded system time, process id, and machine id
-    :return: x_coordinate
-    """
     # Collect system-specific information
     system_time = str(time.time()).encode()  # Current system time
     process_id = str(os.getpid()).encode()  # Process ID
