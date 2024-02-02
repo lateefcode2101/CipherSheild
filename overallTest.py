@@ -7,8 +7,6 @@ import subprocess
 import time
 import uuid
 
-from Crypto.Cipher import AES, PKCS1_OAEP
-from Crypto.PublicKey import RSA
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -17,24 +15,15 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 # from encryptVideoUsingAESandRSA import encrypt_video, decrypt_video, write_file, generate_aes_key
 from ClearFolders import delete_files_in_subfolders
 
+global_i = None
+previous_aes_key = None
 
-# from ECCKeyGenerator import ecc_generate_key, int_to_base64
-
-
-# from encryptFirstChunk import chunk
-# from encryptVideoUsingAESandRSA import encrypt_video, decrypt_video
 
 def read_video_file(file_path):
     with open(file_path, 'rb') as f:
         fileData = f.read()
     return fileData
 
-
-# def generate_aes_key():
-#     with open('keys/aesKey/aes_key.txt', 'rb') as file:
-#         aes_key = file.read().strip()
-#         print("type of aes key read is ", type(aes_key))
-#     return aes_key  # AES key size is 16 bytes (128 bits)
 
 def generate_x_coordinate():
     # Collect system-specific information
@@ -67,7 +56,11 @@ def int_to_base64(integer):
 def ecc_generate_key():
     # Compute the x coordinate from the shared secret
     x = generate_x_coordinate()
-
+    print("size of x is: ", len(str(x)))
+    if global_i == 1:
+        a = int.from_bytes(get_vid(), 'big')
+    else:
+        a = int.from_bytes(str(previous_aes_key).encode(), 'big')
     # Compute the RHS of the ECC equation
     rhs = x ** 3 + a * x + b
 
@@ -80,6 +73,7 @@ def ecc_generate_key():
 def generate_aes_key_with_ecc():
     ecc_key = ecc_generate_key()
     ecc_key_base64 = int_to_base64(ecc_key)
+    print("Ecc key in use is: ", ecc_key_base64)
 
     # Hash the ECC key to generate an AES key of appropriate size
     aes_key = hashlib.sha256(ecc_key_base64).digest()
@@ -92,11 +86,11 @@ def generate_aes_key_with_ecc():
 
 # Function to encrypt video using AES-GCM and RSA
 def encrypt_video(video_file, public_key_file):
+    global previous_aes_key
     # Read the video file
     video_data = read_video_file(video_file)
-
-    # Generate a random AES key
     aes_key = generate_aes_key_with_ecc()
+    previous_aes_key = aes_key
 
     # Generate a random nonce
     nonce = os.urandom(16)  # Nonce size for AES GCM mode is typically 12 bytes
@@ -128,6 +122,8 @@ def encrypt_video(video_file, public_key_file):
     # Combine encrypted AES key, nonce, tag, and encrypted video data
     encrypted_data = encrypted_aes_key + nonce + tag + encrypted_video
     print(f'len of encrypted_data  is {len(encrypted_data)}')
+
+    previous_aes_key = aes_key
 
     return encrypted_data
 
@@ -300,22 +296,17 @@ def get_video_duration(input_file):
 
 # Function to encrypt chunks of video files
 def encrypt_chunks(input_folder, output_folder, public_key):
+    global global_i
     for filename in os.listdir(input_folder):
-        # if filename.find('part_1_') != -1:
-        #     continue
+        if filename.find('part_1_') != -1:
+            global_i = 1
+        if filename.find('part_1_') == -1:
+            global_i = 0
         if filename.endswith(".mp4"):
-            input_file = filename
             input_file = os.path.join(input_folder, filename)
             # print("input file during encryption is ",input_file)
             encrypted_video = encrypt_video(input_file, public_key)
-            encrypted_chunks_folder = os.path.join(output_folder, f'{os.path.basename(input_file)[:-4]}')
-            encrypted_aes_key_folder = os.path.join('content/encrypted_aes_keys',
-                                                    f'{os.path.basename(input_file)[:-4]}')
 
-            # if not os.path.exists(encrypted_chunks_folder.split("_part_")[0]):
-            #     os.makedirs(encrypted_chunks_folder)
-            # if not os.path.exists(encrypted_aes_key_folder.split("_part_")[0]):
-            #     os.makedirs(encrypted_aes_key_folder)
             if not os.path.exists(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}'):
                 os.makedirs(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}')
 
@@ -399,7 +390,6 @@ def combine_video_chunks(input_folder, output_file):
     print(f"Combined video saved to: {output_file}")
 
 
-
 def extract_number(filename):
     return int(filename.split('_part_')[1].split('_')[0])
 
@@ -464,14 +454,15 @@ if __name__ == "__main__":
     # Define the paths to public and private keys
     public_key_path = 'keys/pubKey/public_key.pem'
     private_key_path = 'keys/privKey/private_key.pem'
-
+    a = 0
+    i = 0
     start_time = time.time()
     # Split the video into chunks and encrypt the first chunk
     split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}')
     end_time = time.time()
     execution_time = end_time - start_time
     print(f"\nChunking time: {execution_time:.6f} seconds")
-    a = int.from_bytes(get_vid(), 'big')  # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
+    # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
     b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
 
     start_time = time.time()
