@@ -17,7 +17,26 @@ from ClearFolders import delete_files_in_subfolders
 
 global_i = None
 previous_aes_key = None
-
+# Define the paths to public and private keys
+public_key_path = 'keys/pubKey/public_key.pem'
+private_key_path = 'keys/privKey/private_key.pem'
+def generate_required_content_folders(video_path):
+    if not os.path.exists('content'):
+        os.makedirs('content')
+    if not os.path.exists('content/decrypted_chunks'):
+        os.makedirs('content/decrypted_chunks')
+    if not os.path.exists('content/encrypted_chunks'):
+        os.makedirs('content/encrypted_chunks')
+    if not os.path.exists('content/Vid'):
+        os.makedirs('content/Vid')
+    if not os.path.exists('content/FinalVideo'):
+        os.makedirs('content/FinalVideo')
+    if not os.path.exists(f'content/Vid/{os.path.basename(video_path)[:-4]}'):
+        os.makedirs(f'content/Vid/{os.path.basename(video_path)[:-4]}')
+    if not os.path.exists(f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}'):
+        os.makedirs(f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}')
+    if not os.path.exists(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}'):
+        os.makedirs(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}')
 
 def read_video_file(file_path):
     with open(file_path, 'rb') as f:
@@ -358,15 +377,6 @@ def combine_video_chunks(input_folder, output_file):
         for file in input_files:
             f.write(f"file '{os.path.basename(file)}'\n")
 
-    # # Path to the combine_videos.py script in location B
-    # combine_script_path = input_folder + '/combine.sh'
-    # # Open source file for reading
-    # with open('combine.sh', 'rb') as src:
-    #     # Open destination file for writing
-    #     with open(combine_script_path, 'wb') as dest:
-    #         # Read from source and write to destination
-    #         dest.write(src.read())
-
     # Store the current working directory
     original_directory = os.getcwd()
 
@@ -418,16 +428,15 @@ def get_mac_address():
 
 
 def save_vid(first_chunk_file):
-    if not os.path.exists(f'content/Vid/{os.path.basename(video_path)[:-4]}'):
-        os.makedirs(f'content/Vid/{os.path.basename(video_path)[:-4]}')
+
     with open(first_chunk_file, 'rb') as f:
         first_chunk_data = f.read()
-        bmdat_position = first_chunk_data.find(b'!')
+        exclamation_position = first_chunk_data.find(b'!')
 
         # Ensure "!" is found before attempting to extract bytes
-        if bmdat_position != -1:
+        if exclamation_position != -1:
             # Extract the 16 bytes after the occurrence of "!"
-            extracted_bytes = first_chunk_data[bmdat_position + len('!'): bmdat_position + len('!') + 16]
+            extracted_bytes = first_chunk_data[exclamation_position + len('!'): exclamation_position + len('!') + 16]
             extracted_bytes_base64 = base64.b64encode(extracted_bytes).rstrip(b'=')
             with open(f'content/Vid/{os.path.basename(video_path)[:-4]}/VID.txt', "wb") as fwrite_base64:
                 fwrite_base64.write(extracted_bytes_base64)
@@ -437,8 +446,7 @@ def save_vid(first_chunk_file):
 if __name__ == "__main__":
     # Path to the original video file
     video_path = 'Videos/getfit.mp4'
-    # Custom ECC Equation Constants
-
+    generate_required_content_folders()
     # Clean up any existing files in relevant directories
     delete_files_in_subfolders('content')
     if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
@@ -451,9 +459,6 @@ if __name__ == "__main__":
     # os.remove('chunks_of_'+folder_path,true)
 
     startFull_time = time.time()
-    # Define the paths to public and private keys
-    public_key_path = 'keys/pubKey/public_key.pem'
-    private_key_path = 'keys/privKey/private_key.pem'
     a = 0
     i = 0
     start_time = time.time()
@@ -485,7 +490,6 @@ if __name__ == "__main__":
     print(f"Encryption time: {execution_time:.6f} seconds")
 
     start_time = time.time()
-
     combine_video_chunks(f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}',
                          f'content/FinalVideo/{os.path.basename(video_path)[:-4]}/{os.path.basename(video_path)}')
     end_time = time.time()
