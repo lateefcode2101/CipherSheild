@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CipherShield Dashboard</title>
+    <link rel="stylesheet" href="../styles/dashboardStyle.css">
+    <script type="text/javascript" language="JavaScript" src="../scripts/dashboardScript.js"></script>
+
+</head>
+
+<body>
+    <!-- Navigation Bar -->
+    <nav>
+        <ul>
+            <li><a href="#home">Home</a></li>
+            <li><a href="#encryption">Send Encrypted stream</a></li>
+            <li><a href="#decryption">Decryption</a></li>
+            <li><a href="#settings">Settings</a></li>
+            <li><a href="#help">Help</a></li>
+            <li><a href="#profile">Profile</a></li>
+            <li><a href="#logout">Logout</a></li>
+        </ul>
+    </nav>
+
+    <!-- Dashboard Home Page -->
+    <section id="home" class="page">
+        <h1>Dashboard Home</h1>
+        <!-- Add content and statistics here -->
+    </section>
+
+    <!-- Welcome Section -->
+    <div class="page">
+        <h1>Welcome User123</h1>
+        <div class="stats">
+            <p>Total Video Files Streamed: <span id="totalVideos">0</span></p>
+        </div>
+    </div>
+
+    <!-- Encryption Status Page -->
+    <section id="encryption" class="page">
+        <h1>Stream Status</h1>
+        <button onclick="navigateToEncryption()">Go to file selection Page</button>
+        <!-- Add encryption status and controls here -->
+    </section>
+
+    <!-- Decryption Status Page -->
+    <section id="decryption" class="page">
+        <h1>Decryption Status</h1>
+        <!-- Add decryption status and controls here -->
+    </section>
+
+    <!-- Settings Page -->
+    <section id="settings" class="page">
+        <h1>Settings</h1>
+        <!-- Add settings options and configurations here -->
+    </section>
+
+    <!-- Help and Documentation Page -->
+    <section id="help" class="page">
+        <h1>Help & Documentation</h1>
+        <!-- Add user guide, FAQs, and support information here -->
+    </section>
+
+    <!-- Profile Page -->
+    <section id="profile" class="page">
+        <h1>User Profile</h1>
+        <!-- Add user profile information and update options here -->
+    </section>
+
+    <!-- Logout Functionality -->
+    <section id="logout" class="page">
+        <h1>Logout</h1>
+        <!-- Add logout functionality and confirmation message here -->
+    </section>
+
+    <script src="scripts.js"></script>
+</body>
+
+</html>

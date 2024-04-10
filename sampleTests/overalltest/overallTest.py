@@ -18,19 +18,19 @@ from ClearFolders import delete_files_in_subfolders
 global_i = None
 previous_aes_key = None
 # Define the paths to public and private keys
-public_key_path = 'keys/pubKey/public_key.pem'
-private_key_path = 'keys/privKey/private_key.pem'
+public_key_path = '../../keys/pubKey/public_key.pem'
+private_key_path = '../../keys/privKey/private_key.pem'
 def generate_required_content_folders(video_path):
-    if not os.path.exists('content'):
-        os.makedirs('content')
-    if not os.path.exists('content/decrypted_chunks'):
-        os.makedirs('content/decrypted_chunks')
-    if not os.path.exists('content/encrypted_chunks'):
-        os.makedirs('content/encrypted_chunks')
-    if not os.path.exists('content/Vid'):
-        os.makedirs('content/Vid')
-    if not os.path.exists('content/FinalVideo'):
-        os.makedirs('content/FinalVideo')
+    if not os.path.exists('../../content'):
+        os.makedirs('../../content')
+    if not os.path.exists('../../content/decrypted_chunks'):
+        os.makedirs('../../content/decrypted_chunks')
+    if not os.path.exists('../../content/encrypted_chunks'):
+        os.makedirs('../../content/encrypted_chunks')
+    if not os.path.exists('../../content/Vid'):
+        os.makedirs('../../content/Vid')
+    if not os.path.exists('../../content/FinalVideo'):
+        os.makedirs('../../content/FinalVideo')
     if not os.path.exists(f'content/Vid/{os.path.basename(video_path)[:-4]}'):
         os.makedirs(f'content/Vid/{os.path.basename(video_path)[:-4]}')
     if not os.path.exists(f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}'):
@@ -47,11 +47,10 @@ def read_video_file(file_path):
 def generate_x_coordinate():
     # Collect system-specific information
     system_time = str(time.time()).encode()  # Current system time
-    process_id = str(os.getpid()).encode()  # Process ID
     machine_id = str(uuid.uuid4()).replace("-", "").encode()  # Machine ID (example: user ID)
 
     # Concatenate and hash the collected information
-    data_to_hash = b''.join([system_time, process_id, machine_id])
+    data_to_hash = b''.join([system_time, machine_id])
     hashed_data = hashlib.sha256(data_to_hash).digest()
 
     # Convert the hash to an integer for use as the x-coordinate
@@ -181,8 +180,8 @@ def decrypt_video(encrypted_data, private_key_file):
 
 def chunk(action, output_file):
     video_file = output_file
-    public_key_file = 'keys/pubKey/public_key.pem'
-    private_key_file = 'keys/privKey/private_key.pem'
+    public_key_file = '../../keys/pubKey/public_key.pem'
+    private_key_file = '../../keys/privKey/private_key.pem'
 
     if action == 'encrypt':
         # Encrypt the video file
@@ -446,9 +445,11 @@ def save_vid(first_chunk_file):
 if __name__ == "__main__":
     # Path to the original video file
     video_path = 'Videos/getfit.mp4'
-    generate_required_content_folders()
+    generate_required_content_folders(video_path)
     # Clean up any existing files in relevant directories
     delete_files_in_subfolders('content')
+    delete_files_in_subfolders(f'chunks_of_{os.path.basename(video_path)[:-4]}')
+
     if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
         os.makedirs(f'chunks_of_{os.path.basename(video_path)[:-4]}')
 

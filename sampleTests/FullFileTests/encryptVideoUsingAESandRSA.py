@@ -1,6 +1,6 @@
 # Function to generate a random AES key
 def generate_aes_key():
-    with open('keys/aesKey/aes_key.txt', 'rb') as file:
+    with open('../../keys/aesKey/aes_key.txt', 'rb') as file:
         aes_key = file.read().strip()
         print("type of aes key read is ", type(aes_key))
     return aes_key  # AES key size is 16 bytes (128 bits)

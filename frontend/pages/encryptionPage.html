@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encryption Page - CipherShield</title>
+    <link rel="stylesheet" href="../styles/encryptionStyle.css">
+
+
+</head>
+
+<body>
+    <!-- Navigation Bar -->
+    <nav>
+        <!-- Navigation links here -->
+        <ul>
+            <li><a href="#home">Home</a></li>
+            <li><a href="#encryption">Encryption</a></li>
+            <li><a href="#decryption">Decryption</a></li>
+            <li><a href="#settings">Settings</a></li>
+            <li><a href="#help">Help</a></li>
+            <li><a href="#profile">Profile</a></li>
+            <li><a href="#logout">Logout</a></li>
+        </ul>
+    </nav>
+
+    <!-- Encryption Page Content -->
+    <section id="encryption" class="page">
+        <div class="encryption-form">
+            <h2>Encrypt Video</h2>
+            <form id="encryptionForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="videoFile">Select Video File:</label>
+                    <input type="file" id="videoFile" name="videoFile" accept="video/mp4" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit">Encrypt</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- JavaScript for form submission and interaction -->
+    <script src="scripts.js"></script>
+</body>
+
+</html>

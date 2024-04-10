@@ -1,6 +1,8 @@
 /sampleTests/chunks/
 /sampleTests/bash_chunks/
 /sampleTests/Tiger_chunks/
+myenv
+/myenv
 *.mp4
 CryptoQuiltStream
 QuantumSecuristream

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Streaming Receiver</title>
+    <link rel="stylesheet" href="styles/receiver.css">
+    <script src="scripts/receiver.js" defer></script>
+</head>
+<body>
+    <!-- Video Player Section -->
+    <section id="videoPlayer">
+        <video id="receivedVideo" controls></video>
+    </section>
+    
+    <!-- Status and Controls Section -->
+    <section id="statusControls">
+        <div id="status">Waiting for video stream...</div>
+        <button id="startStream">Start Stream</button>
+        <button id="stopStream" disabled>Stop Stream</button>
+    </section>
+</body>
+</html>

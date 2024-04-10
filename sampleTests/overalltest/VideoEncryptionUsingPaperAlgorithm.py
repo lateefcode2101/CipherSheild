@@ -1,12 +1,11 @@
 import base64
 import os
 import subprocess
-import re
 import time
 from cryptography.hazmat.primitives import serialization
-from encryptFirstChunk import chunk
+from sampleTests.FullFileTests.encryptFirstChunk import chunk
 from ClearFolders import delete_files_in_subfolders
-from encryptDecryptRemainingChunks import encrypt_video, decrypt_video, encrypt_chunks, decrypt_chunks
+from sampleTests.FullFileTests.encryptDecryptRemainingChunks import encrypt_chunks
 
 
 def load_public_key_from_pem_file(file_path):
@@ -92,7 +91,7 @@ def split_video_ffmpeg(input_file, output_folder, target_chunk_size_MB_param):
             save_first_video_chunk_bytes(i, output_file, action='encrypt')
         if i > 0:
             encrypt_chunks(output_folder,
-                           output_folder=os.path.join('content/encrypted_chunks/',
+                           output_folder=os.path.join('../../content/encrypted_chunks/',
                                                       f'{os.path.splitext(os.path.basename(input_file))[0]}'),
                            public_key='keys/pubKey/public_key.pem')
 
@@ -109,7 +108,7 @@ def decryptFirstChunk(output_file):
 
 
 if __name__ == "__main__":
-    folder_path = 'content'  # Replace 'path_to_your_folder' with the actual folder path
+    folder_path = '../../content'  # Replace 'path_to_your_folder' with the actual folder path
     delete_files_in_subfolders(folder_path)
     folder_path = 'chunks_of_Original_chunking_Video'  # Replace 'path_to_your_folder' with the actual folder path
     delete_files_in_subfolders(folder_path)

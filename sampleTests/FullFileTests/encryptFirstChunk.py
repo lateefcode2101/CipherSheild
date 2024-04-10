@@ -13,8 +13,8 @@ def read_file(path):
 
 def chunk(action, output_file):
     video_file = output_file
-    public_key_file = 'keys/pubKey/public_key.pem'
-    private_key_file = 'keys/privKey/private_key.pem'
+    public_key_file = '../../keys/pubKey/public_key.pem'
+    private_key_file = '../../keys/privKey/private_key.pem'
 
     if action == 'encrypt':
         # Encrypt the video file

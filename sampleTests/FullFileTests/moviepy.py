@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-video_path = 'Videos/bigVideo.mp4'
+video_path = '../../Videos/bigVideo.mp4'
 
 # Directory path
 directory = f'content\\decrypted_chunks\\{os.path.basename(video_path)[:-4]}'

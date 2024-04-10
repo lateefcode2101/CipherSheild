@@ -1,0 +1,148 @@
+import base64
+import hashlib
+import math
+import os
+import shutil
+import subprocess
+import time
+import uuid
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+# from encryptVideoUsingAESandRSA import encrypt_video, decrypt_video, write_file, generate_aes_key
+from ClearFolders import delete_files_in_subfolders
+global_i = None
+previous_aes_key = None
+
+# Define the paths to public and private keys
+public_key_path = 'keys/pubKey/public_key.pem'
+private_key_path = 'keys/privKey/private_key.pem'
+
+# Function to decrypt video using RSA and AES-GCM
+def decrypt_video(encrypted_data, private_key_file):
+    # Extract the encrypted AES key, nonce, tag, and encrypted video data
+    aes_key_size = 256  # Assuming AES key size of 256 bits
+    encrypted_aes_key = encrypted_data[:aes_key_size]
+    nonce = encrypted_data[aes_key_size:aes_key_size + 16]  # Nonce size for AES GCM mode is typically 16 bytes
+    tag_start = aes_key_size + 16
+    tag_end = tag_start + 16  # Tag size for AES GCM mode is typically 16 bytes
+    tag = encrypted_data[tag_start:tag_end]
+    encrypted_video = encrypted_data[tag_end:]
+
+    # Read the private key
+    with open(private_key_file, 'rb') as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+
+    # Decrypt the AES key using RSA
+    aes_key = private_key.decrypt(
+        encrypted_aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    # Decrypt the video data using AES GCM
+    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
+    decryptor = cipher_aes.decryptor()
+    decrypted_video = decryptor.update(encrypted_video) + decryptor.finalize()
+
+    return decrypted_video
+
+# Function to decrypt chunks of video files
+def decrypt_chunks(input_folder, output_folder, private_key):
+
+    # Iterate through all encrypted video chunks in the input folder
+    for filename in os.listdir(input_folder):
+        if filename.endswith(".enc"):
+            input_file = os.path.join(input_folder, filename)
+            output_file = os.path.join(output_folder, filename)
+            output_file = output_file.replace("encrypted_chunk.enc", "decrypted_chunk.mp4")
+            print("\nDecrypting: ", input_file)
+
+            # Read encrypted chunk data
+            with open(input_file, 'rb') as f:
+                encrypted_data = f.read()
+
+            # Decrypt chunk data using RSA decryption
+            decrypted_data = decrypt_video(encrypted_data, private_key)
+
+            # Write decrypted data to output file
+            # output_folder + '/' + f'{os.path.basename(input_file)[:-4]}_encrypted_chunk.enc'
+            with open(output_file.replace("\\", "/"), 'wb') as f:
+                f.write(decrypted_data)
+            print(f'decryption for {input_file} complete! ===')
+def combine_video_chunks(input_folder, output_file):
+    # Check if the output folder exists, create it if not
+    if not os.path.exists(os.path.dirname(output_file)):
+        os.makedirs(os.path.dirname(output_file))
+
+    # Get a list of all decrypted video chunk files
+    input_files = [f for f in os.listdir(input_folder) if f.endswith('.mp4')]
+
+    # Sort the files based on their numerical order
+    input_files = sorted(input_files, key=lambda x: int(x.split('_part_')[1].split('_')[0]))
+
+    # Create a temporary text file to hold the list of input files
+    list_file = os.path.join(input_folder, 'file_list.txt')
+    with open(list_file, 'w') as f:
+        for file in input_files:
+            f.write(f"file '{os.path.basename(file)}'\n")
+
+    # Store the current working directory
+    original_directory = os.getcwd()
+
+    # Absolute path to the directory containing the script
+    script_directory = os.path.abspath(input_folder)
+
+    # Change working directory to the script directory
+    os.chdir(os.path.dirname(script_directory + f'/{os.path.basename(video_path)[:-4]}'))
+    print("present working directory ", os.getcwd())
+    subprocess.run(
+        ['E:\\installs\\ffmpeg\\bin\\ffmpeg.exe', '-y', '-f', 'concat', '-safe', '0',
+         '-i', 'file_list.txt', '-c',
+         'copy',
+         'output_video.mp4'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+    os.chdir(original_directory)
+    print("current directory is ", os.getcwd())
+    print("input_folder is ", input_folder.replace("/", "\\"))
+    print("output_file is ", output_file)
+    shutil.copy(input_folder + '/output_video.mp4', output_file)
+    print(f"Combined video saved to: {output_file}")
+
+
+if __name__ == "__main__":
+    startFull_time = time.time()
+    # Path to the original video file
+    video_path = 'Videos/numbersCount.mp4'
+    # Clean up any existing files in relevant directories
+    if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
+        os.makedirs(f'chunks_of_{os.path.basename(video_path)[:-4]}')
+
+    folder_path = f'{os.path.basename(video_path)[:-4]}'
+    delete_files_in_subfolders(folder_path)
+    # os.remove('chunks_of_'+folder_path,true)
+    start_time = time.time()
+    # Decrypt the remaining chunks
+    decrypt_chunks(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}',
+                   f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}', private_key_path)
+    print("os.path.basename(video_path) :", os.path.basename(video_path)[:-4])
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print(f"Encryption time: {execution_time:.6f} seconds")
+
+    start_time = time.time()
+    combine_video_chunks(f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}',
+                         f'content/FinalVideo/{os.path.basename(video_path)[:-4]}/{os.path.basename(video_path)}')
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print(f"Decryption time: {execution_time:.6f} seconds")
+
+    end_time = time.time()
+    execution_time = end_time - startFull_time
+    print(f"Complete Execution time: {execution_time:.6f} seconds")
