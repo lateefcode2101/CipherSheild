@@ -169,10 +169,55 @@ def split_video_ffmpeg(input_file, output_folder):
 #             fwrite_base64.write(extracted_bytes_base64)
 
 
+def encrypt_video(video_file, public_key_file):
+    global previous_aes_key
+    # Read the video file
+    video_data = read_video_file(video_file)
+    aes_key = generate_aes_key_with_ecc_equation()
+
+    # store aes key for next chunk
+    previous_aes_key = aes_key
+
+    # Generate a random nonce
+    nonce = os.urandom(16)
+
+    # Encrypt the video data using AES GCM
+    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce), backend=default_backend())
+    encryptor = cipher_aes.encryptor()
+    encrypted_video = encryptor.update(video_data) + encryptor.finalize()
+    tag = encryptor.tag
+
+    # Read the public key
+    with open(public_key_file, 'rb') as f:
+        public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+    # print('size of public key is ',len(public_key))
+
+    # Encrypt the AES key using RSA
+    encrypted_aes_key = public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
+    print(f'len of nonce  is {len(nonce)}')
+    print(f'len of tag  is {len(tag)}')
+    print(f'len of encrypted_video  is {len(encrypted_video)}')
+
+    # Combine encrypted AES key, nonce, tag, and encrypted video data
+    encrypted_data = encrypted_aes_key + nonce + tag + encrypted_video
+    print(f'len of encrypted_data  is {len(encrypted_data)}')
+
+    previous_aes_key = aes_key
+
+    return encrypted_data
+
+
 # Function to encrypt chunks of video files
 def encrypt_chunks(input_folder, output_folder, public_key):
     global global_i
-    b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
     for filename in os.listdir(input_folder):
         if filename.find('part_1_') != -1:
             global_i = 1
@@ -198,43 +243,8 @@ def read_video_file(file_path):
     return fileData
 
 
-def generate_b():
-    # Collect system-specific information
-    system_time = str(time.time()).encode()  # Current system time
-    process_id = str(os.getpid()).encode()  # Process ID
-    machine_id = str(uuid.uuid4()).replace("-", "").encode()  # Machine ID (example: user ID)
-
-    # Concatenate and hash the collected information
-    data_to_hash = b''.join([system_time, process_id, machine_id])
-    hashed_data = hashlib.sha256(data_to_hash).digest()
-
-    # Convert the hash to an integer for use as the x-coordinate
-    x_coordinate = int.from_bytes(hashed_data, byteorder='big')
-
-    return x_coordinate
-
-
-def ecc_generate_key():
-    # Compute the x coordinate from the shared secret
-    x = int.from_bytes(os.urandom(32), byteorder='big')
-
-    b = generate_b()
-    print("size of x is: ", len(str(x)))
-    if global_i == 1:
-        a = int.from_bytes(get_vid(), 'big')
-    else:
-        a = int.from_bytes(str(previous_aes_key).encode(), 'big')
-    # Compute the RHS of the ECC equation
-    rhs = x ** 3 + a * x + b
-
-    # Compute the square root of the RHS
-    y = int(math.isqrt(rhs))
-
-    return y
-
-
-def generate_aes_key_with_ecc():
-    ecc_key = ecc_generate_key()
+def generate_aes_key_with_ecc_equation():
+    ecc_key = generate_integer_from_ecc_equation()
     ecc_key_base64 = int_to_base64(ecc_key)
     print("Ecc key in use is: ", ecc_key_base64)
 
@@ -248,51 +258,50 @@ def generate_aes_key_with_ecc():
     return aes_key
 
 
+def generate_b_from_system_specific_data():
+    # Collect system-specific information
+    system_time = str(time.time()).replace(".", "").encode()  # Current system time
+    print('system time is ', system_time)
+    process_id = str(os.getpid()).encode()  # Process ID
+    print('process id is ', process_id)
+    machine_id = str(uuid.uuid4()).replace("-", "").encode()  # Machine ID (example: user ID)
+    print('machine id is ', machine_id)
+
+    # Concatenate and hash the collected information
+    data_to_hash = b''.join([system_time, process_id, machine_id])
+    print('system state information looks like this: ', data_to_hash)
+    hashed_data = hashlib.sha256(data_to_hash).digest()
+
+    # Convert the hash to an integer for use as the x-coordinate
+    x_coordinate = int.from_bytes(hashed_data, byteorder='big')
+
+    return x_coordinate
+
+
+def generate_integer_from_ecc_equation():
+    # generate the x coordinate of ecc equation
+    x = int.from_bytes(os.urandom(32), byteorder='big')
+
+    b = generate_b_from_system_specific_data()
+    print("size of x is: ", len(str(x)))
+
+    # if first chunk get the value of a from VID
+    if global_i == 1:
+        a = int.from_bytes(get_vid(), 'big')
+    else:
+        a = int.from_bytes(str(previous_aes_key).encode(), 'big')
+    # Compute the RHS of the ECC equation
+    rhs = x ** 3 + a * x + b
+
+    # Compute the square root of the RHS
+    y = int(math.isqrt(rhs))
+
+    return y
+
+
+
+
 # Function to encrypt video using AES-GCM and RSA
-def encrypt_video(video_file, public_key_file):
-    global previous_aes_key
-    # Read the video file
-    video_data = read_video_file(video_file)
-    aes_key = generate_aes_key_with_ecc()
-    previous_aes_key = aes_key
-
-    # Generate a random nonce
-    nonce = os.urandom(16)
-
-    # Encrypt the video data using AES GCM
-    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce), backend=default_backend())
-    encryptor = cipher_aes.encryptor()
-    encrypted_video = encryptor.update(video_data) + encryptor.finalize()
-    tag = encryptor.tag
-
-    # Read the public key
-    with open(public_key_file, 'rb') as f:
-        public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
-    print('size of public key is ',len(public_key))
-
-    # Encrypt the AES key using RSA
-    encrypted_aes_key = public_key.encrypt(
-        aes_key,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
-    print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
-    print(f'len of nonce  is {len(nonce)}')
-    print(f'len of tag  is {len(tag)}')
-    print(f'len of encrypted_video  is {len(encrypted_video)}')
-
-    # Combine encrypted AES key, nonce, tag, and encrypted video data
-    encrypted_data = encrypted_aes_key + nonce + tag + encrypted_video
-    print(f'len of encrypted_data  is {len(encrypted_data)}')
-
-    previous_aes_key = aes_key
-
-    return encrypted_data
-
-
 def generate_required_content_folders(video_path):
     if not os.path.exists('content'):
         os.makedirs('content')
@@ -341,9 +350,9 @@ if __name__ == "__main__":
     split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}')
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"\nChunking time: {execution_time:.6f} seconds")
+    print(f"\n == Chunking time: {execution_time:.6f} seconds")
     # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
-    #b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
+    # b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
 
     start_time = time.time()
     # Encrypt the remaining chunks
@@ -351,6 +360,7 @@ if __name__ == "__main__":
                    f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}', public_key_path)
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"Encryption time: {execution_time:.6f} seconds")
+    print(f" == Encryption time: {execution_time:.6f} seconds")
     # Decrypt the first chunk
     print("encrypt_chunks function complete !")
+

@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 # from encryptVideoUsingAESandRSA import encrypt_video, decrypt_video, write_file, generate_aes_key
 from ClearFolders import delete_files_in_subfolders
+
 global_i = None
 previous_aes_key = None
 
@@ -21,21 +22,33 @@ previous_aes_key = None
 public_key_path = 'keys/pubKey/public_key.pem'
 private_key_path = 'keys/privKey/private_key.pem'
 
+
 # Function to decrypt video using RSA and AES-GCM
 def decrypt_video(encrypted_data, private_key_file):
+    # Read the private key
+    with open(private_key_file, 'rb') as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+
+    # Determine the RSA key size in bytes
+    rsa_key_size_in_bytes = private_key.key_size // 8
+
+    # Ensure the encrypted data is at least large enough to contain the AES key, nonce, tag, and video data
+    if len(encrypted_data) < rsa_key_size_in_bytes + 16 + 16:
+        raise ValueError(
+            "Encrypted data is too short to contain the necessary components (AES key, nonce, tag, video data).")
+
     # Extract the encrypted AES key, nonce, tag, and encrypted video data
-    aes_key_size = 256  # Assuming AES key size of 256 bits
-    encrypted_aes_key = encrypted_data[:aes_key_size]
-    nonce = encrypted_data[aes_key_size:aes_key_size + 16]  # Nonce size for AES GCM mode is typically 16 bytes
-    tag_start = aes_key_size + 16
-    tag_end = tag_start + 16  # Tag size for AES GCM mode is typically 16 bytes
-    tag = encrypted_data[tag_start:tag_end]
-    encrypted_video = encrypted_data[tag_end:]
+    encrypted_aes_key = encrypted_data[:rsa_key_size_in_bytes]
+    nonce = encrypted_data[rsa_key_size_in_bytes:rsa_key_size_in_bytes + 16]
+    tag = encrypted_data[rsa_key_size_in_bytes + 16:rsa_key_size_in_bytes + 32]
+    encrypted_video = encrypted_data[rsa_key_size_in_bytes + 32:]
 
     # Read the private key
     with open(private_key_file, 'rb') as f:
         private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
 
+    print('len of private kye is ', len(str(private_key)))
+    print('len of encrypted_aes_key is ', len(encrypted_aes_key))
     # Decrypt the AES key using RSA
     aes_key = private_key.decrypt(
         encrypted_aes_key,
@@ -45,6 +58,7 @@ def decrypt_video(encrypted_data, private_key_file):
             label=None
         )
     )
+    print('size of nonce ', len(nonce))
     # Decrypt the video data using AES GCM
     cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
     decryptor = cipher_aes.decryptor()
@@ -52,9 +66,9 @@ def decrypt_video(encrypted_data, private_key_file):
 
     return decrypted_video
 
+
 # Function to decrypt chunks of video files
 def decrypt_chunks(input_folder, output_folder, private_key):
-
     # Iterate through all encrypted video chunks in the input folder
     for filename in os.listdir(input_folder):
         if filename.endswith(".enc"):
@@ -75,6 +89,8 @@ def decrypt_chunks(input_folder, output_folder, private_key):
             with open(output_file.replace("\\", "/"), 'wb') as f:
                 f.write(decrypted_data)
             print(f'decryption for {input_file} complete! ===')
+
+
 def combine_video_chunks(input_folder, output_file):
     # Check if the output folder exists, create it if not
     if not os.path.exists(os.path.dirname(output_file)):
@@ -134,14 +150,14 @@ if __name__ == "__main__":
     print("os.path.basename(video_path) :", os.path.basename(video_path)[:-4])
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"Encryption time: {execution_time:.6f} seconds")
+    print(f" = Decryption time: {execution_time:.6f} seconds")
 
     start_time = time.time()
     combine_video_chunks(f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}',
                          f'content/FinalVideo/{os.path.basename(video_path)[:-4]}/{os.path.basename(video_path)}')
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"Decryption time: {execution_time:.6f} seconds")
+    print(f"= time to combine the chunks: {execution_time:.6f} seconds")
 
     end_time = time.time()
     execution_time = end_time - startFull_time
