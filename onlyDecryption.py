@@ -22,52 +22,51 @@ previous_aes_key = None
 public_key_path = 'keys/pubKey/public_key.pem'
 private_key_path = 'keys/privKey/private_key.pem'
 
+import hashlib
+import os
+import time
+import uuid
+
+def generate_hash_of_system_info(system_time, process_id, machine_id):
+    # Encode the system state information to utf-8
+    system_time_encoded = str(system_time).encode('utf-8')
+    process_id_encoded = str(process_id).encode('utf-8')
+    machine_id_encoded = str(machine_id).encode('utf-8')
+
+    # Concatenate the system state information
+    concatenated_info = system_time_encoded + process_id_encoded + machine_id_encoded
+
+    # Generate the SHA-256 hash of the concatenated information
+    hashed_data = hashlib.sha256(concatenated_info).digest()
+
+    return hashed_data
+
+def verify_hash_of_system_info(known_hash, system_time, process_id, machine_id):
+    # Generate the hash from the provided system-specific information
+    generated_hash = generate_hash_of_system_info(system_time, process_id, machine_id)
+
+    # Compare the known hash with the generated hash
+    if generated_hash == known_hash:
+        print("Verification successful: The generated hash matches the known hash.")
+        return True
+    else:
+        print("Verification failed: The generated hash does not match the known hash.")
+        return False
+
+# Example usage:
+# Assume the following values are used during encryption
+system_time = time.time()  # Current system time
+process_id = os.getpid()  # Current process ID
+machine_id = uuid.uuid4()  # A unique identifier for the machine (e.g., UUID)
+
+# Generate the known hash during encryption
+known_hash = generate_hash_of_system_info(system_time, process_id, machine_id)
+
+# Verify the hash of the system-specific information
+verification_result = verify_hash_of_system_info(known_hash, system_time, process_id, machine_id)
+
 
 # Function to decrypt video using RSA and AES-GCM
-def decrypt_video(encrypted_data, private_key_file):
-    # Read the private key
-    with open(private_key_file, 'rb') as f:
-        private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
-
-    # Determine the RSA key size in bytes
-    rsa_key_size_in_bytes = private_key.key_size // 8
-
-    # Ensure the encrypted data is at least large enough to contain the AES key, nonce, tag, and video data
-    if len(encrypted_data) < rsa_key_size_in_bytes + 16 + 16:
-        raise ValueError(
-            "Encrypted data is too short to contain the necessary components (AES key, nonce, tag, video data).")
-
-    # Extract the encrypted AES key, nonce, tag, and encrypted video data
-    encrypted_aes_key = encrypted_data[:rsa_key_size_in_bytes]
-    nonce = encrypted_data[rsa_key_size_in_bytes:rsa_key_size_in_bytes + 16]
-    tag = encrypted_data[rsa_key_size_in_bytes + 16:rsa_key_size_in_bytes + 32]
-    encrypted_video = encrypted_data[rsa_key_size_in_bytes + 32:]
-
-    # Read the private key
-    with open(private_key_file, 'rb') as f:
-        private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
-
-    print('len of private kye is ', len(str(private_key)))
-    print('len of encrypted_aes_key is ', len(encrypted_aes_key))
-    # Decrypt the AES key using RSA
-    aes_key = private_key.decrypt(
-        encrypted_aes_key,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
-    print('size of nonce ', len(nonce))
-    # Decrypt the video data using AES GCM
-    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
-    decryptor = cipher_aes.decryptor()
-    decrypted_video = decryptor.update(encrypted_video) + decryptor.finalize()
-
-    return decrypted_video
-
-
-# Function to decrypt chunks of video files
 def decrypt_chunks(input_folder, output_folder, private_key):
     # Iterate through all encrypted video chunks in the input folder
     for filename in os.listdir(input_folder):
@@ -89,6 +88,73 @@ def decrypt_chunks(input_folder, output_folder, private_key):
             with open(output_file.replace("\\", "/"), 'wb') as f:
                 f.write(decrypted_data)
             print(f'decryption for {input_file} complete! ===')
+
+
+# Function to decrypt chunks of video files
+def decrypt_video(encrypted_data, private_key_file):
+    # Read the private key
+    with open(private_key_file, 'rb') as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+
+    # Determine the RSA key size in bytes
+    rsa_key_size_in_bytes = private_key.key_size //8
+    print('key size in bytes is ',rsa_key_size_in_bytes)
+
+    # Ensure the encrypted data is at least large enough to contain the AES key, nonce, tag, and video data
+    if len(encrypted_data) < rsa_key_size_in_bytes + 16 + 16:
+        raise ValueError(
+            "Encrypted data is too short to contain the necessary components (AES key, nonce, tag, video data).")
+
+        # Determine the size of the RSA key
+    rsa_key_size_in_bytes = private_key.key_size // 8
+
+    # Split the encrypted data into components: encrypted AES key, nonce, tag, and encrypted video data
+    encrypted_aes_key = encrypted_data[:rsa_key_size_in_bytes]
+    nonce = encrypted_data[rsa_key_size_in_bytes:rsa_key_size_in_bytes + 16]
+    tag = encrypted_data[rsa_key_size_in_bytes + 16:rsa_key_size_in_bytes + 32]
+    encrypted_video = encrypted_data[rsa_key_size_in_bytes + 32:-32]
+    hash_check=encrypted_data[:len(encrypted_data)-32]
+    data_of_encrypted_data=encrypted_data[len(encrypted_data)-32:]
+    print('len of hash check is ',data_of_encrypted_data)
+    print('len of hash calculated is ', hashlib.sha256(hash_check).digest())
+    if data_of_encrypted_data== hashlib.sha256(hash_check).digest():
+        print("Verification done")
+
+
+    print('size of encrypted video is ',len(encrypted_video))
+    print(f'+++type of encrypted aes key is {type(encrypted_aes_key)} and nonce is {type(nonce)} and tag is {type(tag)} ')
+    print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
+    print(f'len of nonce  is {len(nonce)}')
+    print(f'len of tag  is {len(tag)}')
+    print(f'len of encrypted_video  is {len(encrypted_video)}')
+    print('len of private kye is ', len(str(private_key)))
+    print('len of encrypted_aes_key is ', len(encrypted_aes_key))
+    # Decrypt the AES key using RSA
+    aes_key = private_key.decrypt(
+        encrypted_aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    print('aes key is ',aes_key)
+    print('nonce is ',nonce)
+    print('tag is ', tag)
+    print('size of aes ', len(aes_key))
+    print('size of nonce ', len(nonce))
+    print('size of tag ', len(tag))
+
+    # Decrypt the video data using AES GCM
+    cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
+    decryptor = cipher_aes.decryptor()
+    with open('bBytes.txt', 'rb') as f:
+        fileData = f.read()
+    print('file data is \n',fileData)
+    #decryptor.authenticate_additional_data(fileData)
+    decrypted_video = decryptor.update(encrypted_video) + decryptor.finalize()
+
+    return decrypted_video
 
 
 def combine_video_chunks(input_folder, output_file):

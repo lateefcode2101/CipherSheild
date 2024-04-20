@@ -3,6 +3,7 @@ import random
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateNumbers, RSAPublicNumbers
 import random
 from sympy import isprime
@@ -67,10 +68,10 @@ def mod_inverse(a, m):
 def generate_keys(bit_length):
     global p, q
     p = generate_prime(
-        bit_length)
+        bit_length// 2)
     # generate_prime(bit_length // 2)
     q = generate_prime(
-        bit_length)
+        bit_length// 2)
     # generate_prime(bit_length // 2)
     print('len of p is ', p.bit_length())
     print('len of q is ', q.bit_length())
@@ -80,27 +81,13 @@ def generate_keys(bit_length):
 
     e = 65537  # Chosen public exponent
 
-    # Ensure e and phi are coprime
-    while gcd(e, phi) != 1:
-        e = random.randint(3, phi)
+
 
     d = mod_inverse(e, phi)
+    # Save the primes and RSA components to a file for reference
     with open('PrimesData.txt', 'w') as file:
-        file.write("p= ")
-        file.write(str(p))
-        file.write("\n")
-        file.write("Q= ")
-        file.write(str(q))
-        file.write("\n")
-        file.write("n= ")
-        file.write(str(n))
-        file.write("\n")
-        file.write("e= ")
-        file.write(str(e))
-        file.write("\n")
-        file.write("d= ")
-        file.write(str(d))
-        file.write("\n")
+        file.write(f"p = {p}\nq = {q}\nn = {n}\ne = {e}\nd = {d}\n")
+
     return n, e, d
 
 
@@ -110,34 +97,26 @@ def rsa_components_to_pem(n, e, d):
     dmq1 = d % (q - 1)
     iqmp = mod_inverse(q, p)
     # Constructing RSA key objects from the given components
-    public_numbers = RSAPublicNumbers(e, n)
-    private_numbers = RSAPrivateNumbers(
-        public_numbers=public_numbers,
-        p=p,
-        q=q,
-        d=d,
-        dmp1=dmp1,  # We also need the RSA CRT coefficients (dmp1, dmq1, iqmp)
-        dmq1=dmq1,
-        iqmp=iqmp
-    )
-
-    # Create RSA public and private key objects
-    private_key = private_numbers.private_key(default_backend())
-    public_key = public_numbers.public_key(default_backend())
-
-    # Serialize private key to PEM format
-    private_key_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
-    ).decode()
-    # print('private_key_pem is ',private_key_pem)
-
-    # Serialize public key to PEM format
+    public_key = rsa.RSAPublicNumbers(e, n).public_key(default_backend())
     public_key_pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode()
+    )
+
+
+    private_key = rsa.RSAPrivateNumbers(
+        p=p, q=q, d=d, dmp1=dmp1, dmq1=dmq1, iqmp=iqmp, public_numbers=rsa.RSAPublicNumbers(e, n)
+    ).private_key(default_backend())
+
+    # Serialize private key to PEM format
+    private_key_pem  = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()  # No encryption for example
+        )
+    # print('private_key_pem is ',private_key_pem)
+
+
     # print('public key pem is ',public_key_pem)
 
     return private_key_pem, public_key_pem
@@ -146,11 +125,11 @@ def rsa_components_to_pem(n, e, d):
 def write_keys_to_files(private_key_pem, public_key_pem, private_key_filename=private_key_path,
                         public_key_filename=public_key_path):
     # Write the private key to a file
-    with open(private_key_filename, 'w') as private_key_file:
+    with open(private_key_filename, 'wb') as private_key_file:
         private_key_file.write(private_key_pem)
 
     # Write the public key to a file
-    with open(public_key_filename, 'w') as public_key_file:
+    with open(public_key_filename, 'wb') as public_key_file:
         public_key_file.write(public_key_pem)
 
 
@@ -164,8 +143,12 @@ print("\nRSA Public Key (PEM format):")
 print(public_key_pem)
 write_keys_to_files(private_key_pem, public_key_pem)
 print('Keys written to files\n')
-with open('public_key.pem', 'rb') as f:
+with open(public_key_path, 'rb') as f:
     public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
-with open('private_key.pem', 'rb') as f:
+print('Loaded public key bit length:', public_key.key_size)
+
+with open(private_key_path, 'rb') as f:
     private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+print('Loaded private key bit length:', private_key.key_size)
+
 print('keys read successfully')

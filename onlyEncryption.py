@@ -5,6 +5,7 @@ import os
 import subprocess
 import time
 import uuid
+from datetime import datetime
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
@@ -20,7 +21,7 @@ from ClearFolders import delete_files_in_subfolders
 
 global_i = None
 previous_aes_key = None
-
+b = None
 # Define the paths to public and private keys
 public_key_path = 'keys/pubKey/public_key.pem'
 private_key_path = 'keys/privKey/private_key.pem'
@@ -171,9 +172,11 @@ def split_video_ffmpeg(input_file, output_folder):
 
 def encrypt_video(video_file, public_key_file):
     global previous_aes_key
+    global b
     # Read the video file
     video_data = read_video_file(video_file)
     aes_key = generate_aes_key_with_ecc_equation()
+    print('aes key is ', aes_key)
 
     # store aes key for next chunk
     previous_aes_key = aes_key
@@ -184,8 +187,18 @@ def encrypt_video(video_file, public_key_file):
     # Encrypt the video data using AES GCM
     cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce), backend=default_backend())
     encryptor = cipher_aes.encryptor()
+
+    with open('bBytes.txt', 'rb') as f:
+        fileData = f.read()
+    print('file data is \n',fileData)
+
+    #encryptor.authenticate_additional_data(fileData)
+
     encrypted_video = encryptor.update(video_data) + encryptor.finalize()
     tag = encryptor.tag
+    print('==aes key is ', aes_key)
+    print('nonce is ', nonce)
+    print('==tag is ', tag)
 
     # Read the public key
     with open(public_key_file, 'rb') as f:
@@ -209,6 +222,8 @@ def encrypt_video(video_file, public_key_file):
     # Combine encrypted AES key, nonce, tag, and encrypted video data
     encrypted_data = encrypted_aes_key + nonce + tag + encrypted_video
     print(f'len of encrypted_data  is {len(encrypted_data)}')
+    encrypted_data = encrypted_data+hashlib.sha256(encrypted_data).digest()
+
 
     previous_aes_key = aes_key
 
@@ -246,7 +261,7 @@ def read_video_file(file_path):
 def generate_aes_key_with_ecc_equation():
     ecc_key = generate_integer_from_ecc_equation()
     ecc_key_base64 = int_to_base64(ecc_key)
-    print("Ecc key in use is: ", ecc_key_base64)
+    print("Ecc key in use is: ", ecc_key_base64.decode())
 
     # Hash the ECC key to generate an AES key of appropriate size
     aes_key = hashlib.sha256(ecc_key_base64).digest()
@@ -258,31 +273,51 @@ def generate_aes_key_with_ecc_equation():
     return aes_key
 
 
+def generate_custom_timestamp():
+    # Get the current date and time
+    current_time = datetime.now()
+
+    # Format the current date and time in the desired format:
+    # ddmmyyyyhh24miss: Day, Month, Year, Hour (24-hour format), Minutes, Seconds
+    # Milliseconds: using `%f` which includes microseconds; we'll convert it to milliseconds by slicing
+    timestamp = current_time.strftime("%d%m%Y%H%M%S") + str(current_time.microsecond)[:3]
+
+    return timestamp
+
+
 def generate_b_from_system_specific_data():
     # Collect system-specific information
-    system_time = str(time.time()).replace(".", "").encode()  # Current system time
-    print('system time is ', system_time)
+    system_time = str(generate_custom_timestamp()).replace(".", "").encode()  # Current system time
+    print('===system time is ', system_time)
+    print('len of system time is ', len(system_time))
     process_id = str(os.getpid()).encode()  # Process ID
     print('process id is ', process_id)
+    print('len of process id is ', len(process_id))
     machine_id = str(uuid.uuid4()).replace("-", "").encode()  # Machine ID (example: user ID)
     print('machine id is ', machine_id)
+    print('===length of machine id is ', len(machine_id))
 
     # Concatenate and hash the collected information
-    data_to_hash = b''.join([system_time, process_id, machine_id])
-    print('system state information looks like this: ', data_to_hash)
-    hashed_data = hashlib.sha256(data_to_hash).digest()
+    system_Data = b''.join([system_time, process_id, machine_id])
+    print('system state information looks like this: ', system_Data)
+    # hashed_data = hashlib.sha256(system_Data).digest()
 
     # Convert the hash to an integer for use as the x-coordinate
-    x_coordinate = int.from_bytes(hashed_data, byteorder='big')
+    x_coordinate = int.from_bytes(system_Data, byteorder='big')
+    print('x_coordinate is ', x_coordinate)
 
     return x_coordinate
 
 
 def generate_integer_from_ecc_equation():
+    global b
     # generate the x coordinate of ecc equation
     x = int.from_bytes(os.urandom(32), byteorder='big')
 
     b = generate_b_from_system_specific_data()
+    with open('bBytes.txt', "wb") as fwrite_base64:
+        fwrite_base64.write(b.to_bytes((b.bit_length() + 7) // 8, byteorder='big'))
+
     print("size of x is: ", len(str(x)))
 
     # if first chunk get the value of a from VID
@@ -297,8 +332,6 @@ def generate_integer_from_ecc_equation():
     y = int(math.isqrt(rhs))
 
     return y
-
-
 
 
 # Function to encrypt video using AES-GCM and RSA
@@ -363,4 +396,3 @@ if __name__ == "__main__":
     print(f" == Encryption time: {execution_time:.6f} seconds")
     # Decrypt the first chunk
     print("encrypt_chunks function complete !")
-
