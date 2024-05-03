@@ -98,7 +98,7 @@ def decrypt_video(encrypted_data, private_key_file):
 
     # Determine the RSA key size in bytes
     rsa_key_size_in_bytes = private_key.key_size //8
-    print('key size in bytes is ',rsa_key_size_in_bytes)
+    # print('key size in bytes is ',rsa_key_size_in_bytes)
 
     # Ensure the encrypted data is at least large enough to contain the AES key, nonce, tag, and video data
     if len(encrypted_data) < rsa_key_size_in_bytes + 16 + 16:
@@ -113,22 +113,23 @@ def decrypt_video(encrypted_data, private_key_file):
     nonce = encrypted_data[rsa_key_size_in_bytes:rsa_key_size_in_bytes + 16]
     tag = encrypted_data[rsa_key_size_in_bytes + 16:rsa_key_size_in_bytes + 32]
     encrypted_video = encrypted_data[rsa_key_size_in_bytes + 32:-32]
-    hash_check=encrypted_data[:len(encrypted_data)-32]
-    data_of_encrypted_data=encrypted_data[len(encrypted_data)-32:]
-    print('len of hash check is ',data_of_encrypted_data)
-    print('len of hash calculated is ', hashlib.sha256(hash_check).digest())
-    if data_of_encrypted_data== hashlib.sha256(hash_check).digest():
-        print("Verification done")
+    hash_check = encrypted_data[:len(encrypted_data) - 32]
+    data_of_encrypted_data = encrypted_data[len(encrypted_data) - 32:]
+    # print('len of hash check is ',data_of_encrypted_data)
+    # print('len of hash calculated is ', hashlib.sha256(hash_check).digest())
+    if data_of_encrypted_data == hashlib.sha256(hash_check).digest():
+        print("Verification successful: The generated hash matches the known hash.")
+    else:
+        print("Verification Failed: The generated hash does not match the known hash.")
 
-
-    print('size of encrypted video is ',len(encrypted_video))
-    print(f'+++type of encrypted aes key is {type(encrypted_aes_key)} and nonce is {type(nonce)} and tag is {type(tag)} ')
-    print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
-    print(f'len of nonce  is {len(nonce)}')
-    print(f'len of tag  is {len(tag)}')
-    print(f'len of encrypted_video  is {len(encrypted_video)}')
-    print('len of private kye is ', len(str(private_key)))
-    print('len of encrypted_aes_key is ', len(encrypted_aes_key))
+    # print('size of encrypted video is ',len(encrypted_video))
+    # print(f'+++type of encrypted aes key is {type(encrypted_aes_key)} and nonce is {type(nonce)} and tag is {type(tag)} ')
+    # print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
+    # print(f'len of nonce  is {len(nonce)}')
+    # print(f'len of tag  is {len(tag)}')
+    # print(f'len of encrypted_video  is {len(encrypted_video)}')
+    # print('len of private kye is ', len(str(private_key)))
+    # print('len of encrypted_aes_key is ', len(encrypted_aes_key))
     # Decrypt the AES key using RSA
     aes_key = private_key.decrypt(
         encrypted_aes_key,
@@ -138,20 +139,20 @@ def decrypt_video(encrypted_data, private_key_file):
             label=None
         )
     )
-    print('aes key is ',aes_key)
-    print('nonce is ',nonce)
-    print('tag is ', tag)
-    print('size of aes ', len(aes_key))
-    print('size of nonce ', len(nonce))
-    print('size of tag ', len(tag))
+    print('aes key is ', aes_key)
+    # print('nonce is ',nonce)
+    # print('tag is ', tag)
+    # print('size of aes ', len(aes_key))
+    # print('size of nonce ', len(nonce))
+    # print('size of tag ', len(tag))
 
     # Decrypt the video data using AES GCM
     cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce, tag), backend=default_backend())
     decryptor = cipher_aes.decryptor()
-    with open('bBytes.txt', 'rb') as f:
-        fileData = f.read()
-    print('file data is \n',fileData)
-    #decryptor.authenticate_additional_data(fileData)
+    # with open('bBytes.txt', 'rb') as f:
+    #     fileData = f.read()
+    # print('file data is \n',fileData)
+    # #decryptor.authenticate_additional_data(fileData)
     decrypted_video = decryptor.update(encrypted_video) + decryptor.finalize()
 
     return decrypted_video
@@ -191,9 +192,9 @@ def combine_video_chunks(input_folder, output_file):
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
     os.chdir(original_directory)
-    print("current directory is ", os.getcwd())
-    print("input_folder is ", input_folder.replace("/", "\\"))
-    print("output_file is ", output_file)
+    # print("current directory is ", os.getcwd())
+    # print("input_folder is ", input_folder.replace("/", "\\"))
+    # print("output_file is ", output_file)
     shutil.copy(input_folder + '/output_video.mp4', output_file)
     print(f"Combined video saved to: {output_file}")
 
@@ -213,17 +214,17 @@ if __name__ == "__main__":
     # Decrypt the remaining chunks
     decrypt_chunks(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}',
                    f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}', private_key_path)
-    print("os.path.basename(video_path) :", os.path.basename(video_path)[:-4])
+    print("Basename of the video file :", os.path.basename(video_path)[:-4])
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f" = Decryption time: {execution_time:.6f} seconds")
+    print(f"Decryption time: {execution_time:.6f} seconds")
 
     start_time = time.time()
     combine_video_chunks(f'content/decrypted_chunks/{os.path.basename(video_path)[:-4]}',
                          f'content/FinalVideo/{os.path.basename(video_path)[:-4]}/{os.path.basename(video_path)}')
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"= time to combine the chunks: {execution_time:.6f} seconds")
+    print(f"Time to combine the chunks: {execution_time:.6f} seconds")
 
     end_time = time.time()
     execution_time = end_time - startFull_time

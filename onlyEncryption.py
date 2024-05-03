@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 import math
 import os
 import subprocess
@@ -27,6 +28,8 @@ public_key_path = 'keys/pubKey/public_key.pem'
 private_key_path = 'keys/privKey/private_key.pem'
 a = 0
 i = 0
+logging.basicConfig(level=logging.DEBUG)
+debug_flag = False
 
 
 def int_to_base64(integer):
@@ -101,11 +104,13 @@ def split_video_ffmpeg(input_file, output_folder):
         start_time_for = time.time()
         output_file = os.path.join(output_folder,
                                    f'{os.path.splitext(os.path.basename(input_file))[0]}_part_{i + 1}.mp4')
-        print("\nfor output file: ", output_file)
+        if debug_flag:
+            print("\nfor output file: ", output_file)
 
         # Calculate the start and end timestamps for the current chunk
         end_time_seconds = min(start_time_seconds + chunk_duration_seconds, duration)
-        print(f'start time is {start_time_seconds} and end time is {end_time_seconds}')
+        print(
+            f'start time is {start_time_seconds} and end time is {end_time_seconds} for chunk: {os.path.splitext(os.path.basename(input_file))[0]}_part_{i + 1}.mp4')
         # print("input file for ffmpeg is ",input_file)
         # Run FFmpeg command to create the chunk
         subprocess.run([
@@ -116,38 +121,47 @@ def split_video_ffmpeg(input_file, output_folder):
             '-to', str(end_time_seconds),  # End timestamp
             output_file
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        print("subprocess run complete")
+        if debug_flag:
+            print("subprocess run complete")
         start_time_seconds = end_time_seconds
-        print('i is ', i)
+        if debug_flag:
+            print('i is ', i)
         if i == 0:
             first_part_file = output_file
-            print(os.path.basename(first_part_file))
+            if debug_flag:
+                print(os.path.basename(first_part_file))
             # save_vid(first_part_file,video_path)
-            print('in save vid')
+            if debug_flag:
+                print('in save vid')
             if os.path.exists(first_part_file):
-                print('file available')
+                if debug_flag:
+                    print('file available')
 
             with open(first_part_file, 'rb') as f:
                 first_chunk_data = f.read()
-                print('first chunk data read')
+                if debug_flag:
+                    print('first chunk data read')
                 exclamation_position = first_chunk_data.find(b'!')
 
                 # Ensure "!" is found before attempting to extract bytes
                 if exclamation_position != -1:
-                    print('in exclamation')
+                    if debug_flag:
+                        print('in exclamation')
                     # Extract the 16 bytes after the occurrence of "!"
                     extracted_bytes = first_chunk_data[
                                       exclamation_position + len('!'): exclamation_position + len('!') + 16]
-                    print('before extracted bytes')
+                    if debug_flag:
+                        print('before extracted bytes')
                     extracted_bytes_base64 = base64.b64encode(extracted_bytes).rstrip(b'=')
-                    print("video_path is: ", video_path)
+                    if debug_flag:
+                        print("video_path is: ", video_path)
                     with open(f'content/Vid/{os.path.basename(video_path)[:-4]}/VID.txt', "wb") as fwrite_base64:
                         fwrite_base64.write(extracted_bytes_base64)
 
-            print('save vid complete')
+            print('VID retrieved successfully')
         end_time_for = time.time()
         execution_time_for = end_time_for - start_time_for
-        print(f"\nChunking time of {os.path.basename(output_file)} is: {execution_time_for:.6f} seconds\n\n")
+        print(f"Chunking time of {os.path.basename(output_file)} is: {execution_time_for:.6f} seconds\n\n")
 
 
 # def save_vid(first_chunk_file,video_path):
@@ -172,11 +186,12 @@ def split_video_ffmpeg(input_file, output_folder):
 
 def encrypt_video(video_file, public_key_file):
     global previous_aes_key
-    global b
+    global b, debug_flag
     # Read the video file
     video_data = read_video_file(video_file)
     aes_key = generate_aes_key_with_ecc_equation()
-    print('aes key is ', aes_key)
+    if debug_flag:
+        print('aes key is ', aes_key)
 
     # store aes key for next chunk
     previous_aes_key = aes_key
@@ -187,18 +202,20 @@ def encrypt_video(video_file, public_key_file):
     # Encrypt the video data using AES GCM
     cipher_aes = Cipher(algorithms.AES(aes_key), modes.GCM(nonce), backend=default_backend())
     encryptor = cipher_aes.encryptor()
-
-    with open('bBytes.txt', 'rb') as f:
-        fileData = f.read()
-    print('file data is \n',fileData)
-
-    #encryptor.authenticate_additional_data(fileData)
+    #
+    # with open('bBytes.txt', 'rb') as f:
+    #     fileData = f.read()
+    # print('file data is \n',fileData)
+    #
+    # #encryptor.authenticate_additional_data(fileData)
 
     encrypted_video = encryptor.update(video_data) + encryptor.finalize()
     tag = encryptor.tag
-    print('==aes key is ', aes_key)
-    print('nonce is ', nonce)
-    print('==tag is ', tag)
+
+    if debug_flag:
+        print('==aes key is ', aes_key)
+        print('nonce is ', nonce)
+        print('==tag is ', tag)
 
     # Read the public key
     with open(public_key_file, 'rb') as f:
@@ -214,16 +231,17 @@ def encrypt_video(video_file, public_key_file):
             label=None
         )
     )
-    print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
-    print(f'len of nonce  is {len(nonce)}')
-    print(f'len of tag  is {len(tag)}')
-    print(f'len of encrypted_video  is {len(encrypted_video)}')
+    if debug_flag:
+        print(f'len of encrypted_aes_key  is {len(encrypted_aes_key)}')
+        print(f'len of nonce  is {len(nonce)}')
+        print(f'len of tag  is {len(tag)}')
+        print(f'len of encrypted_video  is {len(encrypted_video)}')
 
     # Combine encrypted AES key, nonce, tag, and encrypted video data
     encrypted_data = encrypted_aes_key + nonce + tag + encrypted_video
-    print(f'len of encrypted_data  is {len(encrypted_data)}')
-    encrypted_data = encrypted_data+hashlib.sha256(encrypted_data).digest()
-
+    if debug_flag:
+        print(f'len of encrypted_data  is {len(encrypted_data)}')
+    encrypted_data = encrypted_data + hashlib.sha256(encrypted_data).digest()
 
     previous_aes_key = aes_key
 
@@ -245,11 +263,14 @@ def encrypt_chunks(input_folder, output_folder, public_key):
 
             if not os.path.exists(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}'):
                 os.makedirs(f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}')
-            print("Before writing file")
+            if debug_flag:
+                print("Before writing file")
 
             with open(output_folder + '/' + f'{os.path.basename(input_file)[:-4]}_encrypted_chunk.enc', 'wb') as f:
+                print(f'Encrypted file created: {os.path.basename(input_file)[:-4]}_encrypted_chunk.enc')
                 f.write(encrypted_video)
-            print("after writing file")
+            if debug_flag:
+                print("after writing file")
 
 
 def read_video_file(file_path):
@@ -261,11 +282,13 @@ def read_video_file(file_path):
 def generate_aes_key_with_ecc_equation():
     ecc_key = generate_integer_from_ecc_equation()
     ecc_key_base64 = int_to_base64(ecc_key)
-    print("Ecc key in use is: ", ecc_key_base64.decode())
+    if debug_flag:
+        print("Ecc key in use is: ", ecc_key_base64.decode())
 
     # Hash the ECC key to generate an AES key of appropriate size
     aes_key = hashlib.sha256(ecc_key_base64).digest()
-    print('length of aes key before truncating is ', len(aes_key))
+    if debug_flag:
+        print('length of aes key before truncating is ', len(aes_key))
 
     # Truncate the key to 16 bytes (128 bits) if needed
     aes_key = aes_key[:32]
@@ -288,25 +311,30 @@ def generate_custom_timestamp():
 def generate_b_from_system_specific_data():
     # Collect system-specific information
     system_time = str(generate_custom_timestamp()).replace(".", "").encode()  # Current system time
-    print('===system time is ', system_time)
-    print('len of system time is ', len(system_time))
+    if debug_flag:
+        print('===system time is ', system_time)
+        print('len of system time is ', len(system_time))
     process_id = str(os.getpid()).encode()  # Process ID
-    print('process id is ', process_id)
-    print('len of process id is ', len(process_id))
+    if debug_flag:
+        print('process id is ', process_id)
+        print('len of process id is ', len(process_id))
     machine_id = str(uuid.uuid4()).replace("-", "").encode()  # Machine ID (example: user ID)
-    print('machine id is ', machine_id)
-    print('===length of machine id is ', len(machine_id))
+    if debug_flag:
+        print('machine id is ', machine_id)
+        print('===length of machine id is ', len(machine_id))
 
     # Concatenate and hash the collected information
     system_Data = b''.join([system_time, process_id, machine_id])
-    print('system state information looks like this: ', system_Data)
+    if debug_flag:
+        print('System state information looks like this: ', system_Data)
     # hashed_data = hashlib.sha256(system_Data).digest()
 
     # Convert the hash to an integer for use as the x-coordinate
-    x_coordinate = int.from_bytes(system_Data, byteorder='big')
-    print('x_coordinate is ', x_coordinate)
+    b_coeff = int.from_bytes(system_Data, byteorder='big')
+    if debug_flag:
+        print(' b co-efficient is generated as: ', b_coeff)
 
-    return x_coordinate
+    return b_coeff
 
 
 def generate_integer_from_ecc_equation():
@@ -318,7 +346,9 @@ def generate_integer_from_ecc_equation():
     with open('bBytes.txt', "wb") as fwrite_base64:
         fwrite_base64.write(b.to_bytes((b.bit_length() + 7) // 8, byteorder='big'))
 
-    print("size of x is: ", len(str(x)))
+    if debug_flag:
+        print('x = ', x)
+        print("size of x is: ", len(str(x)))
 
     # if first chunk get the value of a from VID
     if global_i == 1:
@@ -383,7 +413,7 @@ if __name__ == "__main__":
     split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}')
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"\n == Chunking time: {execution_time:.6f} seconds")
+    print(f" == Chunking time: {execution_time:.6f} seconds")
     # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
     # b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
 
@@ -395,4 +425,4 @@ if __name__ == "__main__":
     execution_time = end_time - start_time
     print(f" == Encryption time: {execution_time:.6f} seconds")
     # Decrypt the first chunk
-    print("encrypt_chunks function complete !")
+    print("Encryption function complete !")

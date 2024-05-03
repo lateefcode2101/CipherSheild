@@ -1,0 +1,20 @@
+1. Input file 
+1.1 Check if the file is Video or Text
+1.2 If (text):
+1.3 	encrypt text with AES
+1.4		encrypt aes key with RSA
+1.5 	Send AES-encrypted cipher and encrypted key
+1.6	else if (video):
+2: 		Generate video chunks from input file
+3: 		Fetch the receiver’s public key
+4: 		Collect receiver’s attributes [Device id, System Timestamp, Process Id]
+5: 		Encrypt Vc0 using
+6: 		Generate VID by encrypting Vc0 with public key and receiver’s attributes
+7: 		Encrypt Vc0 using ECC based expression
+8: 		Generate Keya using ECC equation
+9: 		Encrypt Vc1 using Keya and AES
+10: 	for i:=2 do n
+11: 		Generate Keya using previous chunk key
+12: 		Encrypt next chunk using Keya and AES
+13: 	end for
+14: end if
