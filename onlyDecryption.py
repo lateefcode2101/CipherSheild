@@ -1,6 +1,4 @@
-import base64
 import hashlib
-import math
 import os
 import shutil
 import subprocess
@@ -21,11 +19,7 @@ previous_aes_key = None
 # Define the paths to public and private keys
 public_key_path = 'keys/pubKey/public_key.pem'
 private_key_path = 'keys/privKey/private_key.pem'
-
-import hashlib
-import os
-import time
-import uuid
+debug_flag=False
 
 def generate_hash_of_system_info(system_time, process_id, machine_id):
     # Encode the system state information to utf-8
@@ -68,13 +62,14 @@ verification_result = verify_hash_of_system_info(known_hash, system_time, proces
 
 # Function to decrypt video using RSA and AES-GCM
 def decrypt_chunks(input_folder, output_folder, private_key):
+    global debug_flag
     # Iterate through all encrypted video chunks in the input folder
     for filename in os.listdir(input_folder):
         if filename.endswith(".enc"):
             input_file = os.path.join(input_folder, filename)
             output_file = os.path.join(output_folder, filename)
             output_file = output_file.replace("encrypted_chunk.enc", "decrypted_chunk.mp4")
-            print("\nDecrypting: ", input_file)
+            print("\nDecrypting: ", input_file.replace("\\", "/"))
 
             # Read encrypted chunk data
             with open(input_file, 'rb') as f:
@@ -87,11 +82,13 @@ def decrypt_chunks(input_folder, output_folder, private_key):
             # output_folder + '/' + f'{os.path.basename(input_file)[:-4]}_encrypted_chunk.enc'
             with open(output_file.replace("\\", "/"), 'wb') as f:
                 f.write(decrypted_data)
-            print(f'decryption for {input_file} complete! ===')
+            if debug_flag:
+                print(f'decryption for {input_file} complete! ===')
 
 
 # Function to decrypt chunks of video files
 def decrypt_video(encrypted_data, private_key_file):
+    global debug_flag
     # Read the private key
     with open(private_key_file, 'rb') as f:
         private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
@@ -118,9 +115,11 @@ def decrypt_video(encrypted_data, private_key_file):
     # print('len of hash check is ',data_of_encrypted_data)
     # print('len of hash calculated is ', hashlib.sha256(hash_check).digest())
     if data_of_encrypted_data == hashlib.sha256(hash_check).digest():
-        print("Verification successful: The generated hash matches the known hash.")
+        if debug_flag:
+            print("Verification successful: The generated hash matches the known hash.")
     else:
-        print("Verification Failed: The generated hash does not match the known hash.")
+        if debug_flag:
+            print("Verification Failed: The generated hash does not match the known hash.")
 
     # print('size of encrypted video is ',len(encrypted_video))
     # print(f'+++type of encrypted aes key is {type(encrypted_aes_key)} and nonce is {type(nonce)} and tag is {type(tag)} ')
@@ -139,7 +138,8 @@ def decrypt_video(encrypted_data, private_key_file):
             label=None
         )
     )
-    print('aes key is ', aes_key)
+    if debug_flag:
+        print('aes key is ', aes_key)
     # print('nonce is ',nonce)
     # print('tag is ', tag)
     # print('size of aes ', len(aes_key))
@@ -183,7 +183,8 @@ def combine_video_chunks(input_folder, output_file):
 
     # Change working directory to the script directory
     os.chdir(os.path.dirname(script_directory + f'/{os.path.basename(video_path)[:-4]}'))
-    print("present working directory ", os.getcwd())
+    if debug_flag:
+        print("present working directory ", os.getcwd())
     subprocess.run(
         ['E:\\installs\\ffmpeg\\bin\\ffmpeg.exe', '-y', '-f', 'concat', '-safe', '0',
          '-i', 'file_list.txt', '-c',
@@ -202,7 +203,7 @@ def combine_video_chunks(input_folder, output_file):
 if __name__ == "__main__":
     startFull_time = time.time()
     # Path to the original video file
-    video_path = 'Videos/numbersCount.mp4'
+    video_path = 'Videos/test U2.mp4'
     # Clean up any existing files in relevant directories
     if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
         os.makedirs(f'chunks_of_{os.path.basename(video_path)[:-4]}')

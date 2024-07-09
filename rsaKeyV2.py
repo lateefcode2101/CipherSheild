@@ -1,11 +1,9 @@
-import base64
 import random
 
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateNumbers, RSAPublicNumbers
-import random
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from sympy import isprime
 
 p = None
@@ -67,17 +65,22 @@ def mod_inverse(a, m):
 
 def generate_keys(bit_length):
     global p, q
+    print(AES.block_size)
     p = generate_prime(
-        bit_length// 2)
+        bit_length//2)
     # generate_prime(bit_length // 2)
     q = generate_prime(
-        bit_length// 2)
+        bit_length//2)
     # generate_prime(bit_length // 2)
-    print('len of p is ', p.bit_length())
-    print('len of q is ', q.bit_length())
-    print('Type is ', type(p))
+    print('P = ',p)
+    print('\nlen of p is ', p.bit_length())
+    print('\n q = ',q)
+    print('\nlen of q is ', q.bit_length())
+
     n = p * q
+    print('n = p * q = ',n)
     phi = (p - 1) * (q - 1)
+    print('phi = (p - 1) * (q - 1) = ',phi)
 
     e = 65537  # Chosen public exponent
 
@@ -109,7 +112,7 @@ def rsa_components_to_pem(n, e, d):
     ).private_key(default_backend())
 
     # Serialize private key to PEM format
-    private_key_pem  = private_key.private_bytes(
+    private_key_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()  # No encryption for example
@@ -137,18 +140,16 @@ def write_keys_to_files(private_key_pem, public_key_pem, private_key_filename=pr
 bit_length = 2048  # Key size in bits
 n, e, d = generate_keys(bit_length)
 private_key_pem, public_key_pem = rsa_components_to_pem(n, e, d)
-print("RSA Private Key (PEM format):")
+print("\nRSA Private Key (PEM format):")
 print(private_key_pem)
 print("\nRSA Public Key (PEM format):")
 print(public_key_pem)
 write_keys_to_files(private_key_pem, public_key_pem)
-print('Keys written to files\n')
 with open(public_key_path, 'rb') as f:
     public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
-print('Loaded public key bit length:', public_key.key_size)
 
 with open(private_key_path, 'rb') as f:
     private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
-print('Loaded private key bit length:', private_key.key_size)
 
-print('keys read successfully')
+
+print('Keys Generated successfully')

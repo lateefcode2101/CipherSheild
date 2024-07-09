@@ -7,11 +7,15 @@ import subprocess
 import time
 import uuid
 from datetime import datetime
-
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding  # as asymmetric_padding
+
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
+
+import mimetypes
 
 # from flaskTest import file_path
 from ClearFolders import delete_files_in_subfolders
@@ -389,40 +393,146 @@ def get_mac_address():
     return ''.join(("%012X" % mac)[i:i + 2] for i in range(0, 12, 2))
 
 
+# Pad plaintext to be multiple of block size
+def pad(plaintext):
+    block_size = algorithms.AES.block_size // 8  # Convert bits to bytes
+    padding_length = block_size - len(plaintext) % block_size
+    padded_data = plaintext + bytes([padding_length] * padding_length)
+    return padded_data
+
+
+# Unpad plaintext
+def unpad(padded_data):
+    padding_length = padded_data[-1]
+    return padded_data[:-padding_length]
+
+
+# Encrypt plaintext using AES
+def encrypt_with_aes(plaintext, key):
+    iv = hashlib.sha256(key).digest()[:16]
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    padded_data = pad(plaintext)
+    ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    return iv + ciphertext  # Concatenate IV with ciphertext
+
+
+# Decrypt ciphertext using AES
+def decrypt_with_aes(ciphertext, key):
+    iv = ciphertext[:16]  # Extract IV from ciphertext
+    # ciphertext = ciphertext[16:]  # Remove IV from ciphertext
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    plaintext_padded = decryptor.update(ciphertext[16:]) + decryptor.finalize()
+    plaintext = unpad(plaintext_padded)
+    return plaintext
+
+
+# Encrypt AES key using RSA
+def encrypt_aes_key_rsa(aes_key, public_key):
+    encrypted_key = public_key.encrypt(
+        aes_key,
+        asymmetric_padding.OAEP(
+            mgf=asymmetric_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    return encrypted_key
+
+
+def decrypt_aes_key_rsa(encrypted_key, private_key):
+    aes_key = private_key.decrypt(
+        encrypted_key,
+        asymmetric_padding.OAEP(
+            mgf=asymmetric_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    return aes_key
+
+
 if __name__ == "__main__":
+    file_path = None
     # Path to the original video file
-    video_path = 'Videos/numbersCount.mp4'
-    generate_required_content_folders(video_path)
-    # Clean up any existing files in relevant directories
-    delete_files_in_subfolders('content')
-    delete_files_in_subfolders(f'chunks_of_{os.path.basename(video_path)[:-4]}')
+    video_path = 'Videos/test U2.mp4'
+    text_path = 'Texts/testTextFile.txt'
 
-    if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
-        os.makedirs(f'chunks_of_{os.path.basename(video_path)[:-4]}')
+    # =========
+    UseVideo = True
+    # =========
 
-    delete_files_in_subfolders(f'content/decrypted_chunks/{os.path.basename(video_path)}')
-    delete_files_in_subfolders(f'content/encrypted_chunks/{os.path.basename(video_path)}')
-    folder_path = f'{os.path.basename(video_path)[:-4]}'
-    delete_files_in_subfolders(folder_path)
-    # os.remove('chunks_of_'+folder_path,true)
+    if UseVideo == True:
+        file_path = video_path
+    else:
+        file_path = text_path
+    # Check file type
+    file_extension = os.path.splitext(file_path)[1].lower()
+    file_type = mimetypes.guess_type(file_path)[0]
+    print('file type is ', file_type)
 
-    startFull_time = time.time()
+    if file_extension == '.mp4' and 'video/mp4' in file_type:
+        # Text file encryption using AES
 
-    start_time = time.time()
-    # Split the video into chunks and encrypt the first chunk
-    split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}')
-    end_time = time.time()
-    execution_time = end_time - start_time
-    print(f" == Chunking time: {execution_time:.6f} seconds")
-    # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
-    # b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
+        generate_required_content_folders(video_path)
+        # Clean up any existing files in relevant directories
+        delete_files_in_subfolders('content')
+        delete_files_in_subfolders(f'chunks_of_{os.path.basename(video_path)[:-4]}')
 
-    start_time = time.time()
-    # Encrypt the remaining chunks
-    encrypt_chunks(f'chunks_of_{os.path.basename(video_path)[:-4]}',
-                   f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}', public_key_path)
-    end_time = time.time()
-    execution_time = end_time - start_time
-    print(f" == Encryption time: {execution_time:.6f} seconds")
-    # Decrypt the first chunk
-    print("Encryption function complete !")
+        if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
+            os.makedirs(f'chunks_of_{os.path.basename(video_path)[:-4]}')
+
+        delete_files_in_subfolders(f'content/decrypted_chunks/{os.path.basename(video_path)}')
+        delete_files_in_subfolders(f'content/encrypted_chunks/{os.path.basename(video_path)}')
+        folder_path = f'{os.path.basename(video_path)[:-4]}'
+        delete_files_in_subfolders(folder_path)
+        # os.remove('chunks_of_'+folder_path,true)
+        # Check file type
+        file_extension = os.path.splitext(video_path)[1].lower()
+        file_type = mimetypes.guess_type(video_path)[0]
+
+        startFull_time = time.time()
+
+        start_time = time.time()
+        # Split the video into chunks and encrypt the first chunk
+        split_video_ffmpeg(video_path, f'chunks_of_{os.path.basename(video_path)[:-4]}')
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f" == Chunking time: {execution_time:.6f} seconds")
+        # Coefficient 'a' in the equation y^2 = x^3 + a*x + b
+        # b = int.from_bytes(get_mac_address().encode(), 'big')  # Coefficient 'b' in the equation y^2 = x^3 + a*x + b
+
+        start_time = time.time()
+        # Encrypt the remaining chunks
+        encrypt_chunks(f'chunks_of_{os.path.basename(video_path)[:-4]}',
+                       f'content/encrypted_chunks/{os.path.basename(video_path)[:-4]}', public_key_path)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f" == Encryption time: {execution_time:.6f} seconds")
+        # Decrypt the first chunk
+        print("Encryption function complete !")
+
+    elif file_extension == '.txt' and 'text/plain' in file_type:
+        # Load RSA public key
+        with open(public_key_path, 'rb') as f:
+            public_key = serialization.load_pem_public_key(f.read(), backend=default_backend())
+        with open(private_key_path, 'rb') as f:
+            private_key = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+        # Encrypt text using AES with IV
+        with open(file_path, 'rb') as f:
+            plaintext = f.read()
+        aesKeyForTextFile = generate_aes_key_with_ecc_equation()
+        encrypted_text = encrypt_with_aes(plaintext, aesKeyForTextFile)
+        print('encrypted text is ', encrypted_text)
+        # Encrypt AES key using RSA
+        encrypted_aes_key = encrypt_aes_key_rsa(aesKeyForTextFile, public_key)
+
+        # Decrypt AES key using RSA
+        decrypted_aes_key = decrypt_aes_key_rsa(encrypted_aes_key, private_key)
+
+        # Decrypt text using AES with IV
+        decrypted_text = decrypt_with_aes(encrypted_text, decrypted_aes_key)
+
+        print("Decrypted text:\n==\n", decrypted_text.decode('utf-8', 'ignore'))
