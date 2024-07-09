@@ -203,7 +203,7 @@ def combine_video_chunks(input_folder, output_file):
 if __name__ == "__main__":
     startFull_time = time.time()
     # Path to the original video file
-    video_path = 'Videos/test U2.mp4'
+    video_path = 'Videos/ishq.mp4'
     # Clean up any existing files in relevant directories
     if not os.path.exists(f'chunks_of_{os.path.basename(video_path)[:-4]}'):
         os.makedirs(f'chunks_of_{os.path.basename(video_path)[:-4]}')

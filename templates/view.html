@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>View Videos</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>View Videos</h1>
+    <div id="videos"></div>
+    <script>
+        var socket = io();
+        socket.on('new_video', function(data) {
+            var videoElement = document.createElement('div');
+            videoElement.innerHTML = 'New video uploaded with ID: ' + data.video_id;
+            document.getElementById('videos').appendChild(videoElement);
+        });
+    </script>
+</body>
+</html>

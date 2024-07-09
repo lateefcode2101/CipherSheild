@@ -1,17 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Encryption</title>
+    <title>Video Streaming App</title>
 </head>
 <body>
-    <h1>Video Encryption</h1>
-
-<form action="/upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="file">
-    <input type="submit" value="Upload">
-</form>
-
+    <h1>Welcome to the Video Streaming App</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <h2>Your Videos</h2>
+    <ul>
+        {% for video in videos %}
+        <li>
+            <h3>{{ video[1] }}</h3>
+            <p>{{ video[2] }}</p>
+            <p>File Name: {{ video[3] }}</p>
+            <a href="{{ url_for('video', video_id=video[0]) }}">Watch Video</a>
+        </li>
+        {% endfor %}
+    </ul>
+    <a href="{{ url_for('upload') }}">Upload a new video</a>
+    <a href="{{ url_for('logout') }}">Logout</a>
 </body>
 </html>
