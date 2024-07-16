@@ -16,6 +16,11 @@
       <excludeFolder url="file://$MODULE_DIR$/keys/aesKey" />
       <excludeFolder url="file://$MODULE_DIR$/keys/privKey" />
       <excludeFolder url="file://$MODULE_DIR$/keys/pubKey" />
+      <excludeFolder url="file://$MODULE_DIR$/chunks_of_numbersCount" />
+      <excludeFolder url="file://$MODULE_DIR$/chunks_of_test U2" />
+      <excludeFolder url="file://$MODULE_DIR$/content/Vid" />
+      <excludeFolder url="file://$MODULE_DIR$/frontend/videos" />
+      <excludeFolder url="file://$MODULE_DIR$/myenv/Include" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.12" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
